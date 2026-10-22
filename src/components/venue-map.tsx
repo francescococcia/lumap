@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useRef } from "react";
 import * as maplibregl from "maplibre-gl";
@@ -37,7 +37,6 @@ export function VenueMap({ pins, center }: VenueMapProps) {
       style: POSITRON,
       center: [start.lng, start.lat],
       zoom: 11.5,
-      attributionControl: true,
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     mapRef.current = map;
