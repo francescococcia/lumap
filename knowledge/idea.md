@@ -1,4 +1,4 @@
-# Lumate (working name): the open venue DB London organisers keep together
+# Lumap: the open venue map London organisers keep together
 
 ## Pitch (one line)
 Organisers who trust each other share the venues they've actually used, and any of them can ask in chat "free space for 80 next Thursday near Old Street?" and get a real answer with a drafted request in seconds.
@@ -19,7 +19,8 @@ The track scores four things, and every feature below maps to one of them:
    - A vouch can be revoked, and the revoked organiser's pending edits are hidden.
    - A SQL test proves an unvouched insert fails.
 4. **Ask in chat**: "free space for 80 next Thursday evening near Old Street" is parsed into capacity, date, area and needs, then answered with a PostGIS radius filter, capacity and hours, ranked by past hosts. It returns the top 3, each with a reason ("hosted Founders Club, 90 people, in Sept; free for communities; projector"), plus a drafted request email.
-5. **Public feed**: one ranked London events page plus a public `.ics` feed built from Luma and hosted_events, updating live.
+5. **The map (core, it's the name)**: Leaflet with OpenStreetMap tiles. Every venue is a pin, sized by capacity and coloured by trust (vouched or pending). A chat answer draws the search radius and highlights the top 3 pins. Clicking a pin shows capacity, hours, AV and past hosts. About 30 minutes of work, built from the same PostGIS query.
+6. **Public feed**: one ranked London events page plus a public `.ics` feed built from Luma and hosted_events, updating live.
 
 Chat surface: a Discord bot if it works by 20:45. Otherwise a web chat box on the same page, with the same logic either way.
 
@@ -28,6 +29,7 @@ Chat surface: a Discord bot if it works by 20:45. Otherwise a web chat box on th
 - 0:20 Organisers A and B (real people from tonight) have already added venues, and their names are on screen.
 - 0:45 Stranger C tries to post a fake venue and the database refuses it. That's the trust model.
 - 1:15 Organiser D asks the chat question and gets 3 ranked venues with reasons, with the time shown on screen.
+- 1:45 The map zooms to Old Street with the radius and the 3 pins.
 - 2:00 D sends the request to a demo inbox. The venue owner accepts, a tentative event is inserted, and the feed and `.ics` update.
 - 2:30 It's open source, `git clone` plus one command with a city config, so Manchester can run it next week.
 - 2:50 Close: "three London leads have already posted. They're [names]." Only say this if it's true.
@@ -38,12 +40,17 @@ Chat surface: a Discord bot if it works by 20:45. Otherwise a web chat box on th
 - **19:50–20:10** Walk the room: 3 organisers add 10–15 real venues. Get consent to show their names, and ask each one "would you post your venues here tomorrow?" so you can quote their answer.
 - **20:30** Chat search with ranked reasons and a drafted request (LLM parse with a regex fallback). Decide then: Discord or web chat.
 - **21:00** Vouch/revoke flow in the UI, with a readable "not vouched" error
+- **21:10** Map with pins, radius and top-3 highlight
 - **21:20** Ranked events page and public `.ics`
 - **21:35** Record the backup demo video
 - **21:45** Push the public GitHub repo (MIT, README, one-command seed, `.env.example`, city config)
 
-## Cut (stretch only if the core is done)
-Attendee matching, pgvector, DMs, personal `.ics`, voice notes/Whisper, Cognee, Zero outreach, Overture/OSM seeding, Meetup/Devpost/BuilderBase ingestion, WhatsApp, mobile app.
+## Stretch, in order, only if the core works by 21:00
+1. **Cognee as the shared memory (sponsor points)**: feed hosted_events and organiser notes into Cognee so the chat can answer "who has run 80+ people near Old Street?" with a graph answer. The core gets the same facts from a plain SQL table, so nothing breaks if Cognee is skipped.
+2. **Voice ask**: a mic button in web chat records the request, it's transcribed, then sent through the same parser. Typing stays the fallback.
+
+## Cut
+Attendee matching, pgvector, DMs, personal `.ics`, Zero outreach, Overture/OSM seeding, Meetup/Devpost/BuilderBase ingestion, WhatsApp, mobile app.
 
 ## Honesty and safety rules (from the judges)
 - Never say "free". Say "open then, fits 80, hosted similar events, confirm availability".
@@ -62,4 +69,5 @@ Attendee matching, pgvector, DMs, personal `.ics`, voice notes/Whisper, Cognee, 
 - 19:00 Chose track 4.
 - 19:05 Reframed to venue-first.
 - 19:16 The judge panel scored v2 at 54/100. Cut the attendee side, voice and Cognee, and rebuilt around the track's demo script and real venues entered tonight.
+- 19:20 Named it Lumap. The map is core. Cognee and voice moved from cut to stretch.
 - 19:18 The judges re-scored it at 71/100. Fixed the data-capture order, made the demo truthful, and reduced the dependence on external services (target about 80).

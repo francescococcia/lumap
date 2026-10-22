@@ -1,4 +1,4 @@
-# community-hack (working name)
+# Lumap
 
 Project for the **Grok Bot Community Engineering London Hackathon**, Thursday 22 October 2026, Expedite London HQ.
 
