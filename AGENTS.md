@@ -12,3 +12,11 @@ Before planning or writing code, read everything in `knowledge/`, especially `id
 - Build UI from component libraries: shadcn/ui as the base, Magic UI or Aceternity UI for showy pieces, Framer Motion (motion) for animation, lucide-react for icons. Don't hand-roll components that a library already provides.
 - Do not write or run tests. Verify by looking at the running app.
 
+
+## Working in small chunks (every agent: Cursor, Codex, others)
+- The build queue is knowledge/tasks.md. Do ONLY the task id you were given (or the first unticked one in your lane).
+- Don't start the next task, refactor unrelated code, or expand scope. If a task looks bigger than about 20 minutes, split it into smaller cards and do only the first.
+- Stay inside your lane's files. If you must touch another lane's files, say so in Notes.
+- When done: tick the box, add one line under Notes, commit with the task id in the message, then stop and report in 3 lines.
+- Codex works on its own branch 'codex' (or a separate worktree) and merges into build only when its lane is done.
+
