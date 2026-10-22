@@ -15,10 +15,10 @@ Each task should take about 10–20 minutes. If a task grows bigger, split it in
 - Voice: the browser's built-in Web Speech API in Chrome. No key, no Whisper.
 
 ## Lane DB (Supabase)
-- [ ] **DB1 Schema**: `supabase/schema.sql` with organisers, vouches, venues (PostGIS geography point), hosted_events, communities. Done when the SQL runs in the Supabase SQL editor.
-- [ ] **DB2 Trust rules**: RLS policies so only vouched organisers can insert or update venues, contact is hidden from unvouched users, and vouches can be revoked. Root organisers come from `config/city.json`. Done when the policies are in `supabase/policies.sql`.
+- [x] **DB1 Schema**: `supabase/schema.sql` with organisers, vouches, venues (PostGIS geography point), hosted_events, communities. Done when the SQL runs in the Supabase SQL editor.
+- [x] **DB2 Trust rules**: RLS policies so only vouched organisers can insert or update venues, contact is hidden from unvouched users, and vouches can be revoked. Root organisers come from `config/city.json`. Done when the policies are in `supabase/policies.sql`.
 - [x] **DB3 Luma snapshot**: a script that fetches the Luma London discover feed once and saves `seed/luma-london.json`, then `seed/seed.ts` loads venues and hosted_events from it. Done when `npm run seed` fills the tables.
-- [ ] **DB4 Search query**: a Postgres function `search_venues(lat, lng, radius_m, min_capacity, day, time)` that returns the top 3 with a reason string. Done when it returns rows for Old Street, 80 people.
+- [x] **DB4 Search query**: a Postgres function `search_venues(lat, lng, radius_m, min_capacity, day, time)` that returns the top 3 with a reason string. Done when it returns rows for Old Street, 80 people.
 
 ## Lane UI (Next.js, light theme, match docs/lumap-mockup.jpg)
 - [ ] **UI1 Scaffold**: Next.js + Tailwind + shadcn/ui + motion + lucide-react. Top bar as in the mockup. Done when `npm run dev` shows the top bar.
@@ -39,6 +39,9 @@ Each task should take about 10–20 minutes. If a task grows bigger, split it in
 - [ ] **X3 Ship**: README with a one-command setup, city config doc, public GitHub push.
 
 ## Notes
+- DB1: `supabase/schema.sql` plus `supabase/seed.sql` (32 Luma venues, capacity null, `guest_count_lower_bound` kept; 4 fictional EXAMPLE verified venues near Old Street). `scripts/seed.py` regenerates the seed. Also added `config/city.json` with placeholder roots.
+- DB2: `supabase/policies.sql` — `is_vouched(uid)` walks unrevoked vouches from roots. Unvouched venue insert/update raises `Only vouched organisers can post. Ask an organiser to vouch for you.` Map reads `venues_public` (no contact); vouched reads `venues_organiser`.
+- DB4: `search_venues(lat, lng, radius_m, min_capacity, day_of_week, start_time)` optional `max_results` (default 3). Old Street, 80, thu 19:00 returns the EXAMPLE rooms first with a reason string. No contact in the result.
 - S1–S5: Supabase project ref `hkqeybcshbqrwsislgkq` (eu-west-2, PostGIS on). GitHub: https://github.com/francescococcia/lumap
 - DB3 (hackbot): seed/ has the Luma snapshot from 22 Oct with 59 upcoming events, 34 with addresses, and 32 candidate venues (status pending, max_guest_count_lower_bound isn't real capacity). There's no personal host info. The DB1 seed script should load seed/venues-candidates.json and seed/hosted_events.json. Venues collected in the room tonight are the main data.
 - Events (hackbot): seed/events-all.json has 95 events from Luma, Meetup, BuilderBase, MLH and Devpost, ranked with reasons[]. For W4, hide events that already started (or give 'happening now' zero recency points), or tonight's events crowd the top. Never commit a raw/ folder.
