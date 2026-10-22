@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { AlertCircle, CalendarDays, CheckCircle2, Lock, Mail, Clock, MapPin as MapPinIcon, Navigation, Search, ShieldCheck, Users, X } from "lucide-react";
 import { FancySelect, Stepper } from "@/components/ui/fancy-select";
@@ -49,8 +49,8 @@ export function VenueHome() {
   const [vouched, setVouched] = useState<Record<string, boolean>>({});
   const [requested, setRequested] = useState<Record<string, boolean>>({});
 
-  async function onSubmit(event: React.FormEvent) {
-    event.preventDefault();
+  async function onSubmit(event?: React.FormEvent) {
+    event?.preventDefault();
     const area = LONDON_AREAS.find((item) => item.name === areaName) as LondonArea;
     const minCapacity = capacity.trim() === "" ? null : Number(capacity);
     if (minCapacity !== null && (!Number.isFinite(minCapacity) || minCapacity < 0)) {
@@ -89,6 +89,15 @@ export function VenueHome() {
     }
   }
 
+  const autoSearched = useRef(false);
+  useEffect(() => {
+    if (autoSearched.current) return;
+    autoSearched.current = true;
+    const timer = setTimeout(() => void onSubmit(), 900);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const pins: MapPin[] = useMemo(
     () =>
       results.flatMap((venue) => {
@@ -105,7 +114,7 @@ export function VenueHome() {
   return (
     <div className="relative h-[calc(100vh-4rem)] min-h-[560px]">
       <VenueMap pins={pins} center={center} selectedId={selectedId} onSelect={setSelectedId} />
-      <section className="absolute top-4 left-4 z-10 flex max-h-[calc(100%-2rem)] w-[min(100%-2rem,380px)] flex-col gap-3 overflow-auto rounded-[20px] border border-[#ecebf0] bg-white/95 p-4 shadow-[0_12px_40px_rgba(32,32,42,0.08)] backdrop-blur-sm">
+      <section className="absolute top-4 left-4 z-10 flex max-h-[calc(100%-2rem)] w-[min(100%-2rem,380px)] flex-col gap-3 overflow-auto rounded-[20px] [scrollbar-width:thin] [scrollbar-color:#d9d4ea_transparent] border border-[#ecebf0] bg-white/95 p-4 shadow-[0_12px_40px_rgba(32,32,42,0.08)] backdrop-blur-sm">
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-lg font-semibold tracking-tight">Find a room</h1>
           <nav className="flex gap-3 text-sm font-medium" aria-label="More">
@@ -124,11 +133,31 @@ export function VenueHome() {
             <Stepper label="Capacity" value={capacity} onChange={setCapacity} />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1.5 text-sm font-medium text-[#30303a]">
+            <div className="col-span-2 grid gap-1.5 text-sm font-medium text-[#30303a]">
               <span>Day</span>
-              <FancySelect label="Day" icon={<CalendarDays className="h-4 w-4" />} value={day} onChange={setDay} options={DAYS} />
+              <div role="radiogroup" aria-label="Day" className="grid grid-cols-7 gap-1 rounded-xl bg-[#f4f3f8] p-1">
+                {DAYS.map((item) => {
+                  const active = item.value === day;
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      aria-label={item.label}
+                      onClick={() => setDay(item.value)}
+                      className={`relative h-9 rounded-lg text-xs font-semibold transition-colors ${active ? "text-white" : "text-[#6f6d78] hover:text-[#20202a]"}`}
+                    >
+                      {active ? (
+                        <motion.span layoutId="day-pill" className="absolute inset-0 rounded-lg bg-[#7854f6] shadow-[0_4px_12px_rgba(120,84,246,0.3)]" transition={{ type: "spring", stiffness: 420, damping: 32 }} />
+                      ) : null}
+                      <span className="relative">{item.label.slice(0, 3)}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <label className="grid gap-1.5 text-sm font-medium text-[#30303a]">
+            <label className="col-span-2 grid gap-1.5 text-sm font-medium text-[#30303a]">
               Time
               <input className={fieldClass} type="time" value={time} onChange={(event) => setTime(event.target.value)} />
             </label>
