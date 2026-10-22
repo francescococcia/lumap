@@ -1,5 +1,5 @@
-import { getEvents } from "../../../../lib/events";
-import { eventsToIcs } from "../../../../lib/ics";
+import { getEvents } from "../../../lib/events";
+import { eventsToIcs } from "../../../lib/ics";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
