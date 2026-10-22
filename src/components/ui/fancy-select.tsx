@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { Check, ChevronDown } from "lucide-react";
 
@@ -19,16 +20,35 @@ export function FancySelect({ value, onChange, options, label, icon, className =
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const current = options.find((o) => o.value === value) ?? options[0];
 
   useEffect(() => {
     if (!open) return;
     setActive(Math.max(0, options.findIndex((o) => o.value === value)));
+    const place = () => {
+      const r = buttonRef.current?.getBoundingClientRect();
+      if (r) setRect({ top: r.bottom + 8, left: r.left, width: r.width });
+    };
+    place();
+    const onScroll = (event: Event) => {
+      if (listRef.current?.contains(event.target as Node)) return;
+      place();
+    };
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", onScroll, true);
     const onDown = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (!rootRef.current?.contains(target) && !listRef.current?.contains(target)) setOpen(false);
     };
     document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", onScroll, true);
+    };
   }, [open, options, value]);
 
   function onKeyDown(event: React.KeyboardEvent) {
@@ -50,6 +70,7 @@ export function FancySelect({ value, onChange, options, label, icon, className =
   return (
     <div ref={rootRef} className={`relative ${className}`}>
       <button
+        ref={buttonRef}
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -64,15 +85,18 @@ export function FancySelect({ value, onChange, options, label, icon, className =
           <ChevronDown className="h-4 w-4" />
         </motion.span>
       </button>
+      {typeof document !== "undefined" ? createPortal(
       <AnimatePresence>
-        {open ? (
+        {open && rect ? (
           <motion.ul
+            ref={listRef}
             role="listbox"
             initial={{ opacity: 0, y: -6, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="absolute left-0 right-0 z-50 mt-2 max-h-64 origin-top overflow-auto rounded-2xl border border-[#ecebf0] bg-white p-1.5 shadow-[0_16px_40px_rgba(35,30,65,0.14)]"
+            style={rect ? { position: "fixed", top: rect.top, left: rect.left, width: rect.width } : undefined}
+            className="z-[200] max-h-64 origin-top overflow-auto rounded-2xl border border-[#ecebf0] bg-white p-1.5 shadow-[0_16px_40px_rgba(35,30,65,0.14)]"
           >
             {options.map((option, index) => {
               const selected = option.value === value;
@@ -92,7 +116,9 @@ export function FancySelect({ value, onChange, options, label, icon, className =
             })}
           </motion.ul>
         ) : null}
-      </AnimatePresence>
+      </AnimatePresence>,
+        document.body,
+      ) : null}
     </div>
   );
 }

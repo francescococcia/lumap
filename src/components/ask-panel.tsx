@@ -59,10 +59,15 @@ function renderLine(line: string, i: number) {
 }
 
 function cleanSources(sources: string[]) {
-  const id = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
-  return Array.from(new Set(sources
-    .map((s) => s.replace(id, "").replace(/\b(chunk|id|node)[_ ]?(id)?\s*[:=]\s*\S*/gi, "").replace(/[*_`#\[\]()]/g, "").replace(/\s{2,}/g, " ").replace(/^[\s,:;\u00b7-]+|[\s,:;\u00b7-]+$/g, "").trim())
-    .filter((s) => s.length > 3 && /[a-z]{3}/i.test(s)))).slice(0, 6);
+  const labels = sources.map((s) => {
+    const doc = /document\s+([\w.-]+)/i.exec(s)?.[1] ?? "";
+    const venue = /^venue-(-?\d+\.\d+)_(-?\d+\.\d+)/.exec(doc);
+    if (venue) return `Venue record near ${Number(venue[1]).toFixed(3)}, ${Number(venue[2]).toFixed(3)}`;
+    if (/^event/i.test(doc)) return "Community event record";
+    if (doc) return doc.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    return s.replace(/\(.*?\)/g, "").replace(/\b[0-9a-f-]{20,}\b/gi, "").replace(/[*_`#]/g, "").trim();
+  });
+  return Array.from(new Set(labels.filter((s) => s.length > 3))).slice(0, 6);
 }
 
 export function AskPanel() {
