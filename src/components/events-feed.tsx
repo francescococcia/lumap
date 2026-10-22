@@ -78,7 +78,7 @@ export function EventsFeed({ events }: { events: FeedEvent[] }) {
               Subscribe once and the best upcoming community events land in your calendar automatically. The feed updates itself, so there's nothing to download or re-import.
             </p>
             <div className="mt-5 flex flex-wrap gap-2">
-              <a href={googleSubscribe} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#7854f6] px-4 text-sm font-medium text-white shadow-[0_8px_20px_rgba(120,84,246,0.25)] transition-transform hover:bg-[#6842eb] active:scale-[0.98]">
+              <a href={googleSubscribe} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#7854f6] px-4 text-sm font-medium !text-white shadow-[0_8px_20px_rgba(120,84,246,0.25)] transition-transform hover:bg-[#6842eb] active:scale-[0.98]">
                 <Rss className="h-4 w-4" /> Subscribe in Google Calendar
               </a>
               <a href={feedWebcal} className="inline-flex h-11 items-center gap-2 rounded-xl border border-[#e2dcf7] bg-white px-4 text-sm font-medium text-[#30303a] transition-colors hover:bg-[#faf9ff]">
@@ -122,7 +122,7 @@ export function EventsFeed({ events }: { events: FeedEvent[] }) {
                   ) : null}
                 </div>
                 <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
-                  <a href={googleAddLink(event)} target="_blank" rel="noreferrer" aria-label={`Add ${event.title} to Google Calendar`} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#7854f6] px-3 text-xs font-medium text-white hover:bg-[#6842eb]">
+                  <a href={googleAddLink(event)} target="_blank" rel="noreferrer" aria-label={`Add ${event.title} to Google Calendar`} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#7854f6] px-3 text-xs font-medium !text-white hover:bg-[#6842eb]">
                     <CalendarPlus className="h-3.5 w-3.5" /> Add
                   </a>
                   {event.url ? (

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { CalendarDays, CheckCircle2, Clock, MapPin as MapPinIcon, Navigation, Search, ShieldCheck, Users, X } from "lucide-react";
+import { AlertCircle, CalendarDays, CheckCircle2, Lock, Mail, Clock, MapPin as MapPinIcon, Navigation, Search, ShieldCheck, Users, X } from "lucide-react";
 import { FancySelect, Stepper } from "@/components/ui/fancy-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,6 +47,7 @@ export function VenueHome() {
   const [searched, setSearched] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [vouched, setVouched] = useState<Record<string, boolean>>({});
+  const [requested, setRequested] = useState<Record<string, boolean>>({});
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -220,6 +221,25 @@ export function VenueHome() {
               <div className="rounded-2xl border border-[#ecebf0] p-4">
                 <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#8473c2]">Why it matches</p>
                 <p className="text-sm leading-6 text-[#484751]">{clean(selected.reason)}</p>
+              </div>
+              <div className="rounded-2xl border border-[#f3e3c3] bg-[#fffaf0] p-4">
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#a86a10]">
+                  <AlertCircle className="h-3.5 w-3.5" /> Still missing for organisers
+                </p>
+                <ul className="grid gap-1.5 text-sm text-[#5f5640]">
+                  <li className="flex items-center gap-2"><Lock className="h-3.5 w-3.5 text-[#a86a10]" /> Booking contact, shared only with vouched organisers</li>
+                  <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-[#e3b25a]" /> Price per evening</li>
+                  <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-[#e3b25a]" /> Step-free access and toilets</li>
+                  <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-[#e3b25a]" /> Projector, mics and wifi</li>
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => setRequested((r) => ({ ...r, [selected.id]: true }))}
+                  disabled={requested[selected.id]}
+                  className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#ecd7ad] bg-white text-sm font-medium text-[#6b4a0c] transition-colors hover:bg-[#fff4de] disabled:cursor-default disabled:border-[#cfe9db] disabled:bg-[#f3fbf6] disabled:text-[#1f7a52]"
+                >
+                  {requested[selected.id] ? <><CheckCircle2 className="h-4 w-4" /> Asked the vouching organisers</> : <><Mail className="h-4 w-4" /> Request contact and details</>}
+                </button>
               </div>
               <Button
                 onClick={() => setVouched((v) => ({ ...v, [selected.id]: !v[selected.id] }))}

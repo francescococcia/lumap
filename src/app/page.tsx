@@ -24,13 +24,6 @@ export default function Home() {
         </nav>
         <div className="flex items-center gap-3">
           <AddVenueDialog />
-          <Button asChild className="h-10 gap-2 rounded-xl bg-[#7854f6] px-3.5 font-medium text-white shadow-sm hover:bg-[#6842eb]">
-            <a href="/events#subscribe">
-            <CalendarDays className="h-4 w-4" />
-            <span className="hidden sm:inline">.ics Subscribe</span>
-            <span className="sm:hidden">.ics</span>
-            </a>
-          </Button>
         </div>
       </header>
       <VenueHome />
