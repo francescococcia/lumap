@@ -40,3 +40,4 @@ Each task should take about 10–20 minutes. If a task grows bigger, split it in
 
 ## Notes
 - DB3 (hackbot): seed/ has the Luma snapshot from 22 Oct with 59 upcoming events, 34 with addresses, and 32 candidate venues (status pending, max_guest_count_lower_bound isn't real capacity). There's no personal host info. The DB1 seed script should load seed/venues-candidates.json and seed/hosted_events.json. Venues collected in the room tonight are the main data.
+- Events (hackbot): seed/events-all.json has 95 events from Luma, Meetup, BuilderBase, MLH and Devpost, ranked with reasons[]. For W4, hide events that already started (or give 'happening now' zero recency points), or tonight's events crowd the top. Never commit a raw/ folder.
