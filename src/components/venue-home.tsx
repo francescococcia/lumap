@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { motion } from "motion/react";
-import { Search } from "lucide-react";
+import { useMemo, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { CheckCircle2, MapPin as MapPinIcon, Navigation, Search, ShieldCheck, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { VenueMap, type MapPin } from "@/components/venue-map";
@@ -44,6 +44,8 @@ export function VenueHome() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [vouched, setVouched] = useState<Record<string, boolean>>({});
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -56,6 +58,8 @@ export function VenueHome() {
 
     setLoading(true);
     setError(null);
+    setSelectedId(null);
+    setResults([]);
     setCenter(area);
     try {
       const supabase = getSupabase();
@@ -84,7 +88,7 @@ export function VenueHome() {
     }
   }
 
-  const pins: MapPin[] = results
+  const pins: MapPin[] = useMemo(() => results
     .filter((venue) => Number.isFinite(venue.lat) && Number.isFinite(venue.lng))
     .map((venue) => ({
       id: venue.id,
@@ -92,11 +96,13 @@ export function VenueHome() {
       lat: venue.lat,
       lng: venue.lng,
       status: venue.status,
-    }));
+    })), [results]);
+  const selected = results.find((venue) => venue.id === selectedId) ?? null;
+  const clean = (text: string | null) => (text ?? "").replace(/\u00c2/g, "");
 
   return (
     <div className="relative h-[calc(100vh-4rem)] min-h-[560px]">
-      <VenueMap pins={pins} center={center} />
+      <VenueMap pins={pins} center={center} selectedId={selectedId} onSelect={setSelectedId} />
       <section className="absolute top-4 left-4 z-10 flex max-h-[calc(100%-2rem)] w-[min(100%-2rem,380px)] flex-col gap-3 overflow-auto rounded-[20px] border border-[#ecebf0] bg-white/95 p-4 shadow-[0_12px_40px_rgba(32,32,42,0.08)] backdrop-blur-sm">
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-lg font-semibold tracking-tight">Find a room</h1>
@@ -155,20 +161,41 @@ export function VenueHome() {
         </form>
         {error ? <p className="rounded-xl bg-[#fff4f4] px-3 py-2 text-sm text-[#9b2c2c]">{error}</p> : null}
         <div className="grid gap-3">
+          {loading
+            ? [0, 1, 2].map((i) => (
+                <motion.div
+                  key={`skeleton-${i}`}
+                  className="h-[108px] rounded-2xl bg-gradient-to-r from-[#f3f1f8] via-[#ebe6fb] to-[#f3f1f8] bg-[length:200%_100%]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1, backgroundPosition: ["100% 0%", "-100% 0%"] }}
+                  transition={{ opacity: { delay: i * 0.08 }, backgroundPosition: { duration: 1.2, repeat: Infinity, ease: "linear" } }}
+                />
+              ))
+            : null}
+          <AnimatePresence>
           {results.map((venue, index) => (
-            <motion.div
+            <motion.button
+              type="button"
               key={venue.id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: index * 0.06 }}
+              onClick={() => setSelectedId(venue.id)}
+              initial={{ opacity: 0, y: 18, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8 }}
+              whileHover={{ y: -3 }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ type: "spring", stiffness: 300, damping: 26, delay: index * 0.1 }}
+              className="text-left"
             >
-              <Card>
+              <Card className={`transition-shadow ${selectedId === venue.id ? "border-[#7854f6] shadow-[0_0_0_3px_rgba(120,84,246,0.15)]" : "hover:shadow-md"}`}>
                 <CardHeader>
-                  <CardTitle>{venue.name}</CardTitle>
-                  <CardDescription>{venue.address || "London"}</CardDescription>
+                  <CardTitle className="flex items-center gap-2">
+                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#7854f6] text-xs font-semibold text-white">{index + 1}</span>
+                    {venue.name}
+                  </CardTitle>
+                  <CardDescription>{clean(venue.address) || "London"}</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-1 text-[#484751]">
-                  <p>{venue.reason}</p>
+                  <p>{clean(venue.reason)}</p>
                   <p className="text-xs text-[#777580]">
                     {venue.capacity ? `Fits ${venue.capacity}` : "Capacity unknown"}
                     {venue.distance_m != null ? ` · ${Math.round(venue.distance_m)} m` : ""}
@@ -176,13 +203,64 @@ export function VenueHome() {
                   </p>
                 </CardContent>
               </Card>
-            </motion.div>
+            </motion.button>
           ))}
+          </AnimatePresence>
           {searched && !error && results.length === 0 ? (
             <p className="text-sm text-[#777580]">No venues in that search.</p>
           ) : null}
         </div>
       </section>
+
+      <AnimatePresence>
+        {selected ? (
+          <motion.aside
+            key={selected.id}
+            initial={{ opacity: 0, x: 40 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 40 }}
+            transition={{ type: "spring", stiffness: 280, damping: 30 }}
+            className="absolute top-4 right-14 bottom-4 z-20 flex w-[min(100%-2rem,360px)] flex-col overflow-auto rounded-[24px] border border-[#ecebf0] bg-white/95 shadow-[0_20px_60px_rgba(32,32,42,0.14)] backdrop-blur-md"
+          >
+            <div className="relative h-28 shrink-0 bg-gradient-to-br from-[#efe9ff] via-[#f6f2ff] to-[#e6f7ef]">
+              <button onClick={() => setSelectedId(null)} aria-label="Close venue panel" className="absolute top-3 right-3 rounded-full bg-white/90 p-1.5 text-[#6f6d78] shadow-sm hover:text-[#20202a]">
+                <X className="h-4 w-4" />
+              </button>
+              <span className={`absolute bottom-3 left-5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${selected.status === "pending" ? "bg-[#fff4e0] text-[#a86a10]" : "bg-[#e6f7ef] text-[#1f7a52]"}`}>
+                <ShieldCheck className="h-3.5 w-3.5" /> {selected.status === "pending" ? "Pending vouches" : "Vouched by organisers"}
+              </span>
+            </div>
+            <div className="flex flex-col gap-4 p-5">
+              <div>
+                <h2 className="text-xl font-semibold tracking-[-0.02em] text-[#20202a]">{selected.name}</h2>
+                <p className="mt-1 flex items-start gap-1.5 text-sm text-[#6f6d78]"><MapPinIcon className="mt-0.5 h-4 w-4 shrink-0" />{clean(selected.address) || "London"}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-2xl bg-[#faf9ff] p-3"><p className="text-xs text-[#8a8894]">Capacity</p><p className="mt-0.5 flex items-center gap-1.5 font-semibold"><Users className="h-4 w-4 text-[#7854f6]" />{selected.capacity ?? "?"}</p></div>
+                <div className="rounded-2xl bg-[#faf9ff] p-3"><p className="text-xs text-[#8a8894]">Distance</p><p className="mt-0.5 flex items-center gap-1.5 font-semibold"><Navigation className="h-4 w-4 text-[#7854f6]" />{selected.distance_m != null ? `${Math.round(selected.distance_m)} m` : "?"}</p></div>
+              </div>
+              <div className="rounded-2xl border border-[#ecebf0] p-4">
+                <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#8473c2]">Why it matches</p>
+                <p className="text-sm leading-6 text-[#484751]">{clean(selected.reason)}</p>
+              </div>
+              <Button
+                onClick={() => setVouched((v) => ({ ...v, [selected.id]: !v[selected.id] }))}
+                className={`h-11 rounded-xl ${vouched[selected.id] ? "bg-[#e6f7ef] text-[#1f7a52] hover:bg-[#d9f2e6]" : "bg-[#7854f6] text-white hover:bg-[#6842eb]"}`}
+              >
+                {vouched[selected.id] ? <><CheckCircle2 className="mr-2 h-4 w-4" />You vouched for this venue</> : <><ShieldCheck className="mr-2 h-4 w-4" />I've hosted here, vouch</>}
+              </Button>
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&destination=${selected.lat},${selected.lng}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#e8e7ed] text-sm font-medium text-[#30303a] hover:bg-[#faf9ff]"
+              >
+                <Navigation className="h-4 w-4" /> Directions
+              </a>
+            </div>
+          </motion.aside>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

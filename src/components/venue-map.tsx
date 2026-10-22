@@ -17,17 +17,35 @@ export type MapPin = {
 type VenueMapProps = {
   pins: MapPin[];
   center: { lat: number; lng: number };
+  selectedId?: string | null;
+  onSelect?: (id: string) => void;
 };
+
+if (typeof document !== "undefined" && !document.getElementById("lumap-pin-css")) {
+  const style = document.createElement("style");
+  style.id = "lumap-pin-css";
+  style.textContent = `
+@keyframes lumapPinIn { 0% { transform: translateY(-18px) scale(0.4); opacity: 0 } 60% { transform: translateY(2px) scale(1.12); opacity: 1 } 100% { transform: translateY(0) scale(1); opacity: 1 } }
+@keyframes lumapPulse { 0% { box-shadow: 0 0 0 0 rgba(120,84,246,0.45) } 100% { box-shadow: 0 0 0 16px rgba(120,84,246,0) } }
+.lumap-pin { cursor: pointer; }
+.lumap-pin-dot { width: 28px; height: 28px; border-radius: 999px; border: 3px solid #fff; color: #fff; font: 600 12px/22px system-ui, sans-serif; text-align: center; box-shadow: 0 4px 12px rgba(32,32,42,0.25); transition: transform .2s ease, background .2s ease; animation: lumapPinIn .55s cubic-bezier(.2,.8,.2,1) both; }
+.lumap-pin:hover .lumap-pin-dot { transform: scale(1.15); }
+.lumap-pin.is-selected .lumap-pin-dot { background: #7854f6 !important; transform: scale(1.25); animation: lumapPulse 1.4s ease-out infinite; }
+`;
+  document.head.appendChild(style);
+}
 
 function pinColor(status: string | null) {
   return status === "pending" ? "#e39b2b" : "#2faf78";
 }
 
-export function VenueMap({ pins, center }: VenueMapProps) {
+export function VenueMap({ pins, center, selectedId, onSelect }: VenueMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const initialCenter = useRef(center);
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -53,16 +71,22 @@ export function VenueMap({ pins, center }: VenueMapProps) {
 
     const draw = () => {
       markersRef.current.forEach((marker) => marker.remove());
-      markersRef.current = pins.map((pin) => {
+      markersRef.current = pins.map((pin, index) => {
+        const el = document.createElement("div");
+        el.className = "lumap-pin";
+        el.dataset.id = pin.id;
+        el.title = pin.name;
         const dot = document.createElement("div");
-        dot.title = pin.name;
-        dot.style.width = "16px";
-        dot.style.height = "16px";
-        dot.style.borderRadius = "999px";
+        dot.className = "lumap-pin-dot";
+        dot.textContent = String(index + 1);
         dot.style.background = pinColor(pin.status);
-        dot.style.border = "2px solid #ffffff";
-        dot.style.boxShadow = "0 1px 6px rgba(32, 32, 42, 0.25)";
-        return new maplibregl.Marker({ element: dot }).setLngLat([pin.lng, pin.lat]).addTo(map);
+        dot.style.animationDelay = `${index * 0.12}s`;
+        el.appendChild(dot);
+        el.addEventListener("click", (event) => {
+          event.stopPropagation();
+          onSelectRef.current?.(pin.id);
+        });
+        return new maplibregl.Marker({ element: el }).setLngLat([pin.lng, pin.lat]).addTo(map);
       });
 
       if (pins.length > 0) {
@@ -77,6 +101,18 @@ export function VenueMap({ pins, center }: VenueMapProps) {
     if (map.loaded()) draw();
     else map.once("load", draw);
   }, [pins, center]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    markersRef.current.forEach((marker) => {
+      const el = marker.getElement();
+      el.classList.toggle("is-selected", el.dataset.id === selectedId);
+    });
+    const pin = pins.find((item) => item.id === selectedId);
+    if (map && pin) {
+      map.flyTo({ center: [pin.lng, pin.lat], zoom: 15, offset: [-120, 0], duration: 900, essential: true });
+    }
+  }, [selectedId, pins]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 }
