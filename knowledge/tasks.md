@@ -17,7 +17,7 @@ Each task should take about 10–20 minutes. If a task grows bigger, split it in
 ## Lane DB (Supabase)
 - [ ] **DB1 Schema**: `supabase/schema.sql` with organisers, vouches, venues (PostGIS geography point), hosted_events, communities. Done when the SQL runs in the Supabase SQL editor.
 - [ ] **DB2 Trust rules**: RLS policies so only vouched organisers can insert or update venues, contact is hidden from unvouched users, and vouches can be revoked. Root organisers come from `config/city.json`. Done when the policies are in `supabase/policies.sql`.
-- [ ] **DB3 Luma snapshot**: a script that fetches the Luma London discover feed once and saves `seed/luma-london.json`, then `seed/seed.ts` loads venues and hosted_events from it. Done when `npm run seed` fills the tables.
+- [x] **DB3 Luma snapshot**: a script that fetches the Luma London discover feed once and saves `seed/luma-london.json`, then `seed/seed.ts` loads venues and hosted_events from it. Done when `npm run seed` fills the tables.
 - [ ] **DB4 Search query**: a Postgres function `search_venues(lat, lng, radius_m, min_capacity, day, time)` that returns the top 3 with a reason string. Done when it returns rows for Old Street, 80 people.
 
 ## Lane UI (Next.js, light theme, match docs/lumap-mockup.jpg)
@@ -39,3 +39,4 @@ Each task should take about 10–20 minutes. If a task grows bigger, split it in
 - [ ] **X3 Ship**: README with a one-command setup, city config doc, public GitHub push.
 
 ## Notes
+- DB3 (hackbot): seed/ has the Luma snapshot from 22 Oct with 59 upcoming events, 34 with addresses, and 32 candidate venues (status pending, max_guest_count_lower_bound isn't real capacity). There's no personal host info. The DB1 seed script should load seed/venues-candidates.json and seed/hosted_events.json. Venues collected in the room tonight are the main data.
