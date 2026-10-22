@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { CheckCircle2, MapPin as MapPinIcon, Navigation, Search, ShieldCheck, Users, X } from "lucide-react";
+import { CalendarDays, CheckCircle2, Clock, MapPin as MapPinIcon, Navigation, Search, ShieldCheck, Users, X } from "lucide-react";
+import { FancySelect, Stepper } from "@/components/ui/fancy-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { VenueMap, type MapPin } from "@/components/venue-map";
@@ -32,7 +33,7 @@ const DAYS = [
 ];
 
 const fieldClass =
-  "h-10 w-full rounded-xl border border-[#e8e7ed] bg-white px-3 text-sm text-[#20202a] outline-none focus:ring-2 focus:ring-[#7854f6]";
+  "h-11 w-full rounded-xl border border-[#e8e7ed] bg-white px-3 text-sm font-medium text-[#20202a] shadow-[0_1px_2px_rgba(32,32,42,0.04)] outline-none transition-all hover:border-[#cfc4fb] focus:border-[#b9a7fb] focus:ring-4 focus:ring-[#7854f6]/10";
 
 export function VenueHome() {
   const [areaName, setAreaName] = useState(LONDON_AREAS[0].name);
@@ -59,7 +60,6 @@ export function VenueHome() {
     setLoading(true);
     setError(null);
     setSelectedId(null);
-    setResults([]);
     setCenter(area);
     try {
       const supabase = getSupabase();
@@ -88,15 +88,16 @@ export function VenueHome() {
     }
   }
 
-  const pins: MapPin[] = useMemo(() => results
-    .filter((venue) => Number.isFinite(venue.lat) && Number.isFinite(venue.lng))
-    .map((venue) => ({
-      id: venue.id,
-      name: venue.name,
-      lat: venue.lat,
-      lng: venue.lng,
-      status: venue.status,
-    })), [results]);
+  const pins: MapPin[] = useMemo(
+    () =>
+      results.flatMap((venue) => {
+        const lat = Number(venue.lat);
+        const lng = Number(venue.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
+        return [{ id: venue.id, name: venue.name, lat, lng, status: venue.status }];
+      }),
+    [results],
+  );
   const selected = results.find((venue) => venue.id === selectedId) ?? null;
   const clean = (text: string | null) => (text ?? "").replace(/\u00c2/g, "");
 
@@ -113,45 +114,25 @@ export function VenueHome() {
           </nav>
         </div>
         <form className="grid gap-3" onSubmit={onSubmit}>
-          <label className="grid gap-1 text-sm font-medium text-[#30303a]">
-            Area
-            <select className={fieldClass} value={areaName} onChange={(event) => setAreaName(event.target.value)}>
-              {LONDON_AREAS.map((area) => (
-                <option key={area.name} value={area.name}>
-                  {area.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm font-medium text-[#30303a]">
-            Capacity
-            <input
-              className={fieldClass}
-              inputMode="numeric"
-              min={0}
-              name="capacity"
-              type="number"
-              value={capacity}
-              onChange={(event) => setCapacity(event.target.value)}
-            />
-          </label>
+          <div className="grid gap-1.5 text-sm font-medium text-[#30303a]">
+            <span>Area</span>
+            <FancySelect label="Area" icon={<MapPinIcon className="h-4 w-4" />} value={areaName} onChange={setAreaName} options={LONDON_AREAS.map((area) => ({ value: area.name, label: area.name }))} />
+          </div>
+          <div className="grid gap-1.5 text-sm font-medium text-[#30303a]">
+            <span>Capacity</span>
+            <Stepper label="Capacity" value={capacity} onChange={setCapacity} />
+          </div>
           <div className="grid grid-cols-2 gap-3">
-            <label className="grid gap-1 text-sm font-medium text-[#30303a]">
-              Day
-              <select className={fieldClass} value={day} onChange={(event) => setDay(event.target.value)}>
-                {DAYS.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1 text-sm font-medium text-[#30303a]">
+            <div className="grid gap-1.5 text-sm font-medium text-[#30303a]">
+              <span>Day</span>
+              <FancySelect label="Day" icon={<CalendarDays className="h-4 w-4" />} value={day} onChange={setDay} options={DAYS} />
+            </div>
+            <label className="grid gap-1.5 text-sm font-medium text-[#30303a]">
               Time
               <input className={fieldClass} type="time" value={time} onChange={(event) => setTime(event.target.value)} />
             </label>
           </div>
-          <Button className="h-10 rounded-xl bg-[#7854f6] text-white hover:bg-[#6842eb]" disabled={loading} type="submit">
+          <Button className="h-11 rounded-xl bg-[#7854f6] shadow-[0_8px_20px_rgba(120,84,246,0.25)] transition-transform active:scale-[0.98] text-white hover:bg-[#6842eb]" disabled={loading} type="submit">
             <Search className="mr-2 h-4 w-4" />
             {loading ? "Searching…" : "Search venues"}
           </Button>

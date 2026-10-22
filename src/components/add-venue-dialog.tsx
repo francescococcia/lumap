@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { CheckCircle2, Plus, ShieldCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FancySelect, Stepper } from "@/components/ui/fancy-select";
 
 const AREAS = ["Old Street", "Shoreditch", "Hackney", "King's Cross", "Camden", "Southwark", "Whitechapel", "Islington"];
 
@@ -100,19 +101,15 @@ export function AddVenueDialog() {
                     <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Hoxton Community Hall"
                       className="mt-1.5 h-11 w-full rounded-xl border border-[#e7e5ed] px-3 font-normal outline-none focus:border-[#b9a7fb] focus:ring-2 focus:ring-[#7854f6]/10" />
                   </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <label className="block text-sm font-medium">
+                  <div className="grid gap-3">
+                    <div className="block text-sm font-medium">
                       Area
-                      <select value={area} onChange={(e) => setArea(e.target.value)}
-                        className="mt-1.5 h-11 w-full rounded-xl border border-[#e7e5ed] bg-white px-3 font-normal outline-none focus:border-[#b9a7fb]">
-                        {AREAS.map((a) => <option key={a}>{a}</option>)}
-                      </select>
-                    </label>
-                    <label className="block text-sm font-medium">
+                      <div className="mt-1.5 font-normal"><FancySelect label="Area" value={area} onChange={setArea} options={AREAS.map((a) => ({ value: a, label: a }))} /></div>
+                    </div>
+                    <div className="block text-sm font-medium">
                       Capacity
-                      <input type="number" min={1} value={capacity} onChange={(e) => setCapacity(e.target.value)}
-                        className="mt-1.5 h-11 w-full rounded-xl border border-[#e7e5ed] px-3 font-normal outline-none focus:border-[#b9a7fb]" />
-                    </label>
+                      <div className="mt-1.5 font-normal"><Stepper label="Capacity" value={capacity} onChange={setCapacity} /></div>
+                    </div>
                   </div>
                   <label className="block text-sm font-medium">
                     Why it works for organisers
