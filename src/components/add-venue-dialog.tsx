@@ -4,9 +4,11 @@ import { FormEvent, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { CheckCircle2, Plus, ShieldCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LONDON_AREAS } from "@/lib/areas";
+import { addVenue } from "@/lib/pending-venues";
 import { FancySelect, Stepper } from "@/components/ui/fancy-select";
 
-const AREAS = ["Old Street", "Shoreditch", "Hackney", "King's Cross", "Camden", "Southwark", "Whitechapel", "Islington"];
+const AREAS = LONDON_AREAS.map((a) => a.name);
 
 export function AddVenueDialog() {
   const [open, setOpen] = useState(false);
@@ -15,6 +17,7 @@ export function AddVenueDialog() {
   const [area, setArea] = useState(AREAS[0]);
   const [capacity, setCapacity] = useState("60");
   const [note, setNote] = useState("");
+  const [address, setAddress] = useState("");
 
   function close() {
     setOpen(false);
@@ -22,12 +25,14 @@ export function AddVenueDialog() {
       setSubmitted(null);
       setName("");
       setNote("");
+      setAddress("");
     }, 250);
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!name.trim()) return;
+    addVenue({ name: name.trim(), address: address.trim(), area, capacity: Number(capacity) || null, note: note.trim() });
     setSubmitted({ name: name.trim(), area });
   }
 
@@ -92,13 +97,21 @@ export function AddVenueDialog() {
                   <div className="flex items-center gap-2 text-sm text-[#6f6d78]">
                     <span className="h-2 w-2 rounded-full bg-[#f2b84b]" /> 0 of 2 vouches
                   </div>
-                  <Button onClick={close} className="h-11 w-full rounded-xl bg-[#7854f6] text-white hover:bg-[#6842eb]">Done</Button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <a href="/review" className="inline-flex h-11 items-center justify-center rounded-xl border border-[#e2dcf7] text-sm font-medium text-[#5a3fd6] hover:bg-[#faf9ff]">Open review queue</a>
+                    <Button onClick={close} className="h-11 rounded-xl bg-[#7854f6] text-white hover:bg-[#6842eb]">Done</Button>
+                  </div>
                 </motion.div>
               ) : (
                 <form onSubmit={submit} className="space-y-4">
                   <label className="block text-sm font-medium">
                     Venue name
                     <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Hoxton Community Hall"
+                      className="mt-1.5 h-11 w-full rounded-xl border border-[#e7e5ed] px-3 font-normal outline-none focus:border-[#b9a7fb] focus:ring-2 focus:ring-[#7854f6]/10" />
+                  </label>
+                  <label className="block text-sm font-medium">
+                    Street address
+                    <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="e.g. 133 Bethnal Green Rd, E2 7DG"
                       className="mt-1.5 h-11 w-full rounded-xl border border-[#e7e5ed] px-3 font-normal outline-none focus:border-[#b9a7fb] focus:ring-2 focus:ring-[#7854f6]/10" />
                   </label>
                   <div className="grid gap-3">

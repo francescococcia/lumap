@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { VenueMap, type MapPin } from "@/components/venue-map";
 import { LONDON_AREAS, LONDON_CENTER, SEARCH_RADIUS_M, type LondonArea } from "@/lib/areas";
 import { getSupabase } from "@/lib/supabase";
+import { CHANGE_EVENT, listVenues } from "@/lib/pending-venues";
 
 export type VenueHit = {
   id: string;
@@ -89,6 +90,34 @@ export function VenueHome() {
     }
   }
 
+  const [localVenues, setLocalVenues] = useState<VenueHit[]>([]);
+  useEffect(() => {
+    const load = () =>
+      setLocalVenues(
+        listVenues()
+          .filter((v) => v.status === "verified")
+          .map((v) => ({
+            id: v.id,
+            name: v.name,
+            address: [v.address, v.area].filter(Boolean).join(", "),
+            lat: v.lat,
+            lng: v.lng,
+            capacity: v.capacity,
+            status: "verified",
+            reason: v.note ? `New: vouched by 2 organisers · ${v.note}` : "New: vouched by 2 organisers",
+            distance_m: null,
+          })),
+      );
+    load();
+    window.addEventListener(CHANGE_EVENT, load);
+    window.addEventListener("storage", load);
+    return () => {
+      window.removeEventListener(CHANGE_EVENT, load);
+      window.removeEventListener("storage", load);
+    };
+  }, []);
+  const allResults = useMemo(() => [...localVenues.filter((v) => !results.some((r) => r.id === v.id)), ...results], [localVenues, results]);
+
   const autoSearched = useRef(false);
   useEffect(() => {
     if (autoSearched.current) return;
@@ -100,15 +129,15 @@ export function VenueHome() {
 
   const pins: MapPin[] = useMemo(
     () =>
-      results.flatMap((venue) => {
+      allResults.flatMap((venue) => {
         const lat = Number(venue.lat);
         const lng = Number(venue.lng);
         if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
         return [{ id: venue.id, name: venue.name, lat, lng, status: venue.status }];
       }),
-    [results],
+    [allResults],
   );
-  const selected = results.find((venue) => venue.id === selectedId) ?? null;
+  const selected = allResults.find((venue) => venue.id === selectedId) ?? null;
   const clean = (text: string | null) => (text ?? "").replace(/\u00c2/g, "");
 
   return (
@@ -181,7 +210,7 @@ export function VenueHome() {
               ))
             : null}
           <AnimatePresence>
-          {results.map((venue, index) => (
+          {allResults.map((venue, index) => (
             <motion.button
               type="button"
               key={venue.id}
