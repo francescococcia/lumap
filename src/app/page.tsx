@@ -1,5 +1,6 @@
 import { CalendarDays, ChevronDown, MapPin } from "lucide-react";
 import { AddVenueDialog } from "@/components/add-venue-dialog";
+import { AskPanel } from "@/components/ask-panel";
 import { Button } from "@/components/ui/button";
 import { VenueHome } from "@/components/venue-home";
 
@@ -20,7 +21,6 @@ export default function Home() {
         </div>
         <nav className="hidden items-center gap-8 text-sm font-medium text-[#484751] md:flex" aria-label="Main navigation">
           <a className="transition-colors hover:text-[#7854f6]" href="/events">Events feed</a>
-          <a className="transition-colors hover:text-[#7854f6]" href="/ask">Ask</a>
           <a className="transition-colors hover:text-[#7854f6]" href="/api/calendar.ics">Calendar</a>
         </nav>
         <div className="flex items-center gap-3">
@@ -35,6 +35,7 @@ export default function Home() {
         </div>
       </header>
       <VenueHome />
+      <AskPanel />
     </main>
   );
 }
