@@ -110,6 +110,8 @@ async function extractVenues(answer: string): Promise<AskVenue[]> {
       if (POSTCODE.test(next)) break;
       details.push(next);
     }
+    name = name.replace(/\s*\(.*$/, "").trim();
+    if (!name || name.length > 40 || name.split(/\s+/).length > 6 || /\b(is|are|the nearer|lies)\b/i.test(name)) return;
     if (!found.some((f) => f.name === name)) found.push({ name: name.trim(), address: address.trim(), postcode: pc[1].toUpperCase(), details });
   });
   const geo = await Promise.all(
@@ -244,9 +246,15 @@ export function AskPanel() {
       if (!result.ok) {
         setTurns((t) => [...t, { q: prompt, answer: null, sources: [], venues: [], error: data.error ?? "Lumap could not answer just now. Please try again." }]);
       } else {
-        const venues = data.answer ? await extractVenues(data.answer) : [];
+        let venues = data.answer ? await extractVenues(data.answer) : [];
+        const earlier = turns.flatMap((t) => t.venues);
+        const mentioned = earlier.filter((v) => (data.answer ?? "").toLowerCase().includes(v.name.toLowerCase()));
+        if (!venues.length && mentioned.length) venues = mentioned;
         setTurns((t) => [...t, { q: prompt, answer: data.answer, sources: data.sources ?? [], venues }]);
-        if (venues.length) showOnMap(venues);
+        if (venues.length) {
+          const all = [...venues, ...earlier.filter((e) => !venues.some((v) => v.id === e.id))];
+          showOnMap(all, (mentioned[0] ?? venues[0]).id);
+        }
       }
     } catch {
       setTurns((t) => [...t, { q: prompt, answer: null, sources: [], venues: [], error: "Could not reach Lumap. Check your connection and try again." }]);
