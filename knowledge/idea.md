@@ -1,42 +1,50 @@
 ﻿# Idea: "Mate" (working name)
 
 - **Track:** 4 - Open Venue & Events DB (see `track-open-venue-db.md`)
-- **One-line pitch:** A mate who knows every London event and community, and messages you only about the ones that fit you, with the reason why.
-- **Whose pain, today:** students and newcomers interested in X scroll Luma, Meetup, Devpost and dozens of WhatsApp groups and still miss the right events and communities. Organisers can't reach the people who would love their event.
-- **The 10x:** from 30+ minutes of scrolling many platforms each week to one message with 3 ranked picks and reasons; new events reach matched people automatically.
-- **Demo moment:** a student types "AI agents, free evenings, near Shoreditch" and Mate replies with 3 ranked events + 2 communities, each with a reason. An organiser adds a new event, and the student's Discord gets a ping and their calendar updates.
-- **Where Grok Bot holds context:** the shared organiser/community knowledge and the reasoning behind each match.
-- **What Cursor builds:** ingest, schema, matching, Discord bot, .ics feed, organiser flow.
-- **Sponsor tech used:** Supabase (DB, auth, RLS, pgvector, PostGIS), Cognee (optional memory of communities/members), Notion (optional public view).
+- **One-line pitch:** One open database and one chat mate that finds organisers a free venue in seconds, then fills the room by pinging the people whose interests match the event.
+- **Whose pain, today:**
+  - Organisers: finding a free evening/weekend venue is the hardest job; the knowledge lives in people's heads and WhatsApp asks.
+  - Attendees (students, people interested in X): scroll Luma, Meetup, Devpost and many groups and still miss the right events.
+- **The 10x:** venue search from days of asking around to seconds in chat with a drafted request; event promotion from posting everywhere to automatically reaching matched people.
+- **Demo moment:** (1) two organisers in the room add real venues; (2) a third asks "free space for 80 people next Thursday evening near Old Street?", gets ranked venues with reasons and sends the drafted request; (3) they publish the event and a student's Discord pings "AI agents night Thursday, 10 min from you" and their calendar updates.
+- **Where Grok Bot holds context:** shared organiser/venue/community knowledge and the reasoning behind each venue pick and attendee match.
+- **What Cursor builds:** schema, venue seed + ingest, venue search chat, organiser flow, matching, Discord bot, .ics feed.
+- **Sponsor tech used:** Supabase (DB, auth, RLS, PostGIS, pgvector), Cognee (optional memory for the shared agent), Zero (optional organiser outreach), Notion (optional public view).
 
-## Architecture
-1. **Open data layer:** ingest London events from Luma discover feed, Luma event JSON (hosts), Devpost, BuilderBase, MLH into Supabase. Each event links to a community (Luma calendar) and venue (geo address). Cache; few calls/minute.
-2. **Profiles:** user describes interests in a sentence (+ optional GitHub, availability, area). Store text + embedding.
-3. **Matching:** rank events/communities by embedding similarity + time/location filters; LLM writes a one-line reason per pick.
-4. **Delivery:** Discord DM via official API (discord.js) and a personal `.ics` feed (ical-generator). New event ingested -> notify matched users.
-5. **Organiser side (track trust model):** approved organisers claim a community, add a venue (capacity, AV, evening/weekend, terms, contact), vouch for other organisers. Supabase RLS: only approved organisers write.
+## Part 1 - Organiser side (track core, build first)
+- Venue DB: name, address, geo (PostGIS), capacity, AV, evening_ok, weekend_ok, terms (free/paid), contact, communities that hosted there.
+- Trust model: only approved organisers write; organisers vouch for each other (Supabase RLS).
+- Seed: venues from past London Luma events (geo_address_info) + OpenStreetMap/Overture; enrich by organisers live.
+- Venue search chat: natural-language ask -> filters (capacity, date/time, area) + PostGIS distance -> ranked venues with reasons + drafted booking request.
+
+## Part 2 - Attendee side (fills the room)
+- Events ingested from Luma discover feed (+ Devpost/BuilderBase/MLH if time), linked to community and venue.
+- Profiles: interests in a sentence (+ area, availability), embedding.
+- Matching: embedding similarity + time/location -> reason line; Discord DM via official API + personal .ics feed. New event -> notify matched people.
 
 ## Schema sketch (Supabase)
-- `communities` (id, name, luma_calendar_id, description, size, audience, contact, claimed_by)
-- `venues` (id, name, address, geo (PostGIS), capacity, av, evening_ok, weekend_ok, terms, contact, added_by)
+- `organisers` (user_id, name, community_id, approved, vouched_by[])
+- `communities` (id, name, luma_calendar_id, description, size, audience, contact)
+- `venues` (id, name, address, geo, capacity, av, evening_ok, weekend_ok, terms, contact, added_by, verified)
+- `venue_hosts` (venue_id, community_id, event_id)
 - `events` (id, source, source_id, title, description, start_at, end_at, url, community_id, venue_id, guest_count, embedding)
 - `profiles` (id, display_name, interests_text, embedding, area_geo, availability, discord_user_id, ics_token)
 - `matches` (profile_id, event_id, score, reason, notified_at)
-- `organisers` (user_id, community_id, approved, vouched_by[])
 
 ## Build order (code freeze 21:50)
-- [ ] By 19:30 - Supabase schema + Luma/Devpost ingest
-- [ ] By 20:15 - interest profile + matching with reasons
-- [ ] By 21:00 - Discord DM + personal .ics feed
-- [ ] By 21:30 - organiser claim / add venue / vouch flow
-- [ ] By 21:50 - backup demo video, push public GitHub repo (MIT licence already in place)
+- [ ] By 19:40 - Supabase schema + venue seed from Luma event addresses
+- [ ] By 20:30 - venue search chat (near me, capacity, time) with reasons + drafted request
+- [ ] By 21:00 - organiser add-venue + vouch flow
+- [ ] By 21:30 - attendee interests + matching + Discord ping (cut first if behind)
+- [ ] By 21:50 - backup demo video, push public GitHub repo (MIT licence in place)
 
 ## Cut list
 - No WhatsApp (unofficial libs break ToS). No Meetup scraping unless time. No mobile app.
 
 ## Risks
-- Track judges score real venues entered tonight + trust model: get 2-3 leads in the room to add venue/community live.
-- Luma discover API is undocumented: cache results, fall back to a saved snapshot for the demo.
+- Need real venues entered tonight: line up 2-3 leads in the room to add theirs live.
+- Luma discover API is undocumented: cache results, keep a saved snapshot for the demo.
 
 ## Decisions log
 - 19:00 - Chose track 4 with an attendee-first "Mate" angle (Francesco).
+- 19:05 - Reframed: organiser venue finder is the core, attendee matching closes the loop (Francesco).
