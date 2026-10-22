@@ -45,9 +45,22 @@ Chat surface: a Discord bot if it works by 20:45. Otherwise a web chat box on th
 - **21:35** Record the backup demo video
 - **21:45** Push the public GitHub repo (MIT, README, one-command seed, `.env.example`, city config)
 
-## Stretch, in order, only if the core works by 21:00
-1. **Cognee as the shared memory (sponsor points)**: feed hosted_events and organiser notes into Cognee so the chat can answer "who has run 80+ people near Old Street?" with a graph answer. The core gets the same facts from a plain SQL table, so nothing breaks if Cognee is skipped.
-2. **Voice ask**: a mic button in web chat records the request, it's transcribed, then sent through the same parser. Typing stays the fallback.
+## Standout features (in core, each timeboxed with a fallback)
+- **Cognee memory**: hosted_events and organiser notes go into Cognee, so chat answers questions like "who has run 80+ people near Old Street?" from the graph. Timebox: 30 min at 21:00. Fallback: the same facts from the SQL table.
+- **Voice ask**: a hold-to-talk mic in the chat. The recording is transcribed and sent through the same parser, and the live transcript appears as the user speaks. Timebox: 20 min at 21:20. Fallback: typing.
+
+## UI/UX direction
+**One screen, map first.** A full-bleed dark map (CARTO Dark Matter or Mapbox dark tiles) takes the whole page, with a floating glass chat panel on the left (backdrop blur, rounded 20px).
+- **Pins**: glowing dots sized by capacity. Green means vouched and amber means pending. Top-3 results pulse and get numbered badges 1, 2, 3.
+- **The search moment**: when a question is sent, the map flies to the area, a radius circle draws itself, the pins drop in one by one, and a stopwatch chip shows "found in 2.4s". This is the money shot.
+- **Result cards**: in the chat, with a venue photo or initials, "fits 80 · open Thu 18–22 · projector", a "hosted by" row with community avatars, and a "Why this?" line from Cognee. Then the buttons "Draft request" and "Show on map".
+- **Trust made visible**: each venue shows "vouched by A, B" as small avatar chips. A blocked junk post shakes the form and shows a red toast: "Only vouched organisers can post. Ask an organiser to vouch for you."
+- **Voice**: a big mic button with a live waveform and a transcript typing itself into the input.
+- **Look**: one accent colour (electric violet #7C5CFF) on near-black, Inter or Geist font, generous spacing, shadcn/ui components, Framer Motion for the fly-to and the pin drops.
+- **Top bar**: Lumap logo (a pin made of an "L"), city switcher (London, from `city.json`), "Add venue", "Events", and a ".ics" subscribe button.
+- **Empty state**: three suggested prompts as chips ("80 people near Old Street, Thursday", "Free weekend space in Shoreditch", "Who hosts AI meetups?").
+
+Stack: Next.js + Tailwind + shadcn/ui + react-map-gl (MapLibre) + Framer Motion. Tell Cursor: "Build the layout from the UI/UX section in knowledge/idea.md."
 
 ## Cut
 Attendee matching, pgvector, DMs, personal `.ics`, Zero outreach, Overture/OSM seeding, Meetup/Devpost/BuilderBase ingestion, WhatsApp, mobile app.
@@ -69,5 +82,6 @@ Attendee matching, pgvector, DMs, personal `.ics`, Zero outreach, Overture/OSM s
 - 19:00 Chose track 4.
 - 19:05 Reframed to venue-first.
 - 19:16 The judge panel scored v2 at 54/100. Cut the attendee side, voice and Cognee, and rebuilt around the track's demo script and real venues entered tonight.
+- 19:22 Cognee and voice are back in core, timeboxed with fallbacks. Added the UI/UX direction.
 - 19:20 Named it Lumap. The map is core. Cognee and voice moved from cut to stretch.
 - 19:18 The judges re-scored it at 71/100. Fixed the data-capture order, made the demo truthful, and reduced the dependence on external services (target about 80).
