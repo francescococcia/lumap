@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { BookOpenText, LoaderCircle, Mic, Send, Sparkles, X } from "lucide-react";
+import { BookOpenText, LoaderCircle, MapPin, Mic, Send, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type SpeechResult = ArrayLike<{ transcript: string }>;
@@ -70,16 +70,100 @@ function cleanSources(sources: string[]) {
   return Array.from(new Set(labels.filter((s) => s.length > 3))).slice(0, 6);
 }
 
+export type AskVenue = {
+  id: string;
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  capacity: number | null;
+  status: string;
+  reason: string;
+  distance_m: null;
+};
+
+type Turn = { q: string; answer: string | null; sources: string[]; error?: string; venues: AskVenue[] };
+
+const POSTCODE = /\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i;
+
+function stripMd(s: string) {
+  return s.replace(/^#{1,6}\s+/, "").replace(/^(?:[-*\u2022]|\d+[.)])\s+/, "").replace(/[*_`]/g, "").trim();
+}
+
+async function extractVenues(answer: string): Promise<AskVenue[]> {
+  const lines = answer.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const found: { name: string; address: string; postcode: string; details: string[] }[] = [];
+  lines.forEach((raw, i) => {
+    const line = stripMd(raw);
+    const pc = POSTCODE.exec(line);
+    if (!pc) return;
+    const parts = line.split(/\s+[\u2013\u2014-]\s+|:\s+/);
+    let name = parts.length > 1 ? parts[0] : line.split(",")[0];
+    let address = parts.length > 1 ? parts.slice(1).join(", ") : line;
+    if (POSTCODE.test(name) && i > 0) {
+      address = line;
+      name = stripMd(lines[i - 1]).split(/[\u2013\u2014:]/)[0];
+    }
+    const details: string[] = [];
+    for (let j = i + 1; j < Math.min(lines.length, i + 5); j++) {
+      const next = stripMd(lines[j]);
+      if (POSTCODE.test(next)) break;
+      details.push(next);
+    }
+    if (!found.some((f) => f.name === name)) found.push({ name: name.trim(), address: address.trim(), postcode: pc[1].toUpperCase(), details });
+  });
+  const geo = await Promise.all(
+    found.slice(0, 8).map(async (v) => {
+      try {
+        const r = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(v.postcode.replace(/\s+/g, ""))}`);
+        const j = (await r.json()) as { result?: { latitude: number; longitude: number } };
+        if (!j.result) return null;
+        const detail = v.details.join(" · ");
+        const cap = /capacity[^\d]*(\d+)/i.exec(detail) ?? /(\d+)\s*(?:attendees|people|guests)/i.exec(detail);
+        return {
+          id: `ask-${v.postcode.replace(/\s+/g, "")}-${v.name.slice(0, 12)}`,
+          name: v.name,
+          address: v.address,
+          lat: j.result.latitude,
+          lng: j.result.longitude,
+          capacity: cap ? Number(cap[1]) : null,
+          status: "suggested",
+          reason: detail ? `Suggested by Ask Lumap · ${detail}` : "Suggested by Ask Lumap from community memory",
+          distance_m: null,
+        } satisfies AskVenue;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return geo.filter((v): v is AskVenue => v !== null);
+}
+
+export const ASK_VENUES_EVENT = "lumap:ask-venues";
+export const FOCUS_VENUE_EVENT = "lumap:focus-venue";
+
+function showOnMap(venues: AskVenue[], focusId?: string) {
+  window.dispatchEvent(new CustomEvent(ASK_VENUES_EVENT, { detail: venues }));
+  const id = focusId ?? venues[0]?.id;
+  if (id) setTimeout(() => window.dispatchEvent(new CustomEvent(FOCUS_VENUE_EVENT, { detail: id })), 50);
+}
+
 export function AskPanel() {
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState("");
   const [speechSupported, setSpeechSupported] = useState(false);
   const [listening, setListening] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [response, setResponse] = useState<AskResponse | null>(null);
+  const [turns, setTurns] = useState<Turn[]>([]);
   const [error, setError] = useState("");
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-  const sources = useMemo(() => cleanSources(response?.sources ?? []), [response]);
+  const endRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("lumap:ask-open", { detail: open }));
+  }, [open]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [turns, loading]);
 
   useEffect(() => {
     const speechWindow = window as SpeechWindow;
@@ -140,21 +224,32 @@ export function AskPanel() {
 
     setLoading(true);
     setError("");
-    setResponse(null);
+    setQuestion("");
+    const history = turns
+      .filter((t) => t.answer)
+      .slice(-2)
+      .map((t) => `Q: ${t.q}\nA: ${(t.answer ?? "").slice(0, 700)}`)
+      .join("\n\n");
+    const full = history ? `Earlier in this conversation:\n${history}\n\nFollow-up question: ${prompt}` : prompt;
     try {
-      const result = await fetch("/api/ask", {
+      let result = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: prompt }),
+        body: JSON.stringify({ question: full }),
       });
+      if (result.status === 503) {
+        result = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: full }) });
+      }
       const data = (await result.json()) as AskResponse;
       if (!result.ok) {
-        setError(data.error ?? "Lumap could not answer just now. Please try again.");
+        setTurns((t) => [...t, { q: prompt, answer: null, sources: [], venues: [], error: data.error ?? "Lumap could not answer just now. Please try again." }]);
       } else {
-        setResponse(data);
+        const venues = data.answer ? await extractVenues(data.answer) : [];
+        setTurns((t) => [...t, { q: prompt, answer: data.answer, sources: data.sources ?? [], venues }]);
+        if (venues.length) showOnMap(venues);
       }
     } catch {
-      setError("Could not reach Lumap. Check your connection and try again.");
+      setTurns((t) => [...t, { q: prompt, answer: null, sources: [], venues: [], error: "Could not reach Lumap. Check your connection and try again." }]);
     } finally {
       setLoading(false);
     }
@@ -195,7 +290,7 @@ export function AskPanel() {
               <X className="h-4 w-4" />
             </button>
 
-          <div className="mb-7 flex items-center gap-3">
+          <div className="mb-5 flex items-center gap-3">
             <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#f0ebff] text-[#7854f6]">
               <Sparkles className="h-5 w-5" aria-hidden="true" />
             </span>
@@ -205,19 +300,72 @@ export function AskPanel() {
             </div>
           </div>
 
-          <p className="mb-4 text-sm leading-6 text-[#6f6d78]">
-            Ask about the venues, communities, and events organisers have shared.
-          </p>
+          {turns.length === 0 ? (
+            <p className="mb-4 text-sm leading-6 text-[#6f6d78]">
+              Ask about the venues, communities, and events organisers have shared. Venues in the answer drop onto the map, and you can keep asking follow-ups.
+            </p>
+          ) : (
+            <button type="button" onClick={() => { setTurns([]); setError(""); }} className="mb-3 self-start text-xs font-medium text-[#7854f6] hover:underline">New conversation</button>
+          )}
 
-          <form onSubmit={submitQuestion} className="space-y-3">
+          <div aria-live="polite" className="space-y-5">
+            {turns.map((turn, ti) => (
+              <motion.div key={ti} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+                <div className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-[#7854f6] px-4 py-2.5 text-[15px] leading-6 text-white">{turn.q}</div>
+                {turn.error ? (
+                  <p role="alert" className="rounded-xl border border-[#f2d6d3] bg-[#fff8f7] px-4 py-3 text-sm text-[#9e4038]">{turn.error}</p>
+                ) : turn.answer ? (
+                  <div className="rounded-2xl rounded-bl-md bg-[#faf9ff] p-5">
+                    <Answer text={turn.answer} />
+                  </div>
+                ) : (
+                  <p className="rounded-2xl bg-[#faf9ff] p-5 text-sm leading-6 text-[#6f6d78]">I couldn’t find an answer in the shared community memory.</p>
+                )}
+                {turn.venues.length ? (
+                  <div className="rounded-2xl border border-[#e4ddfc] p-3">
+                    <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#8473c2]"><MapPin className="h-3.5 w-3.5" /> On the map</p>
+                    <div className="flex flex-wrap gap-2">
+                      {turn.venues.map((v) => (
+                        <button key={v.id} type="button" onClick={() => showOnMap(turn.venues, v.id)} className="inline-flex items-center gap-1.5 rounded-full bg-[#f4f0ff] px-3 py-1.5 text-[13px] font-medium text-[#5a3fd6] transition-colors hover:bg-[#7854f6] hover:!text-white">
+                          <MapPin className="h-3.5 w-3.5" /> {v.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {cleanSources(turn.sources).length ? (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <BookOpenText className="h-3.5 w-3.5 text-[#9a98a3]" aria-hidden="true" />
+                    {cleanSources(turn.sources).map((s, i) => (
+                      <span key={i} className="rounded-full border border-[#ecebf0] px-2.5 py-1 text-xs text-[#6f6d78]">{s}</span>
+                    ))}
+                  </div>
+                ) : null}
+              </motion.div>
+            ))}
+            {loading ? (
+              <div className="flex items-center gap-2 rounded-2xl bg-[#faf9ff] p-4 text-sm text-[#6f6d78]">
+                <LoaderCircle className="h-4 w-4 animate-spin text-[#7854f6]" /> Searching community memory…
+              </div>
+            ) : null}
+            <div ref={endRef} />
+          </div>
+
+          {error && (
+            <p role="alert" className="mt-4 rounded-xl border border-[#f2d6d3] bg-[#fff8f7] px-4 py-3 text-sm text-[#9e4038]">
+              {error}
+            </p>
+          )}
+
+          <form onSubmit={submitQuestion} className="sticky bottom-0 -mx-5 -mb-5 mt-5 space-y-3 bg-gradient-to-t from-white via-white to-white/80 px-5 pt-3 pb-5">
             <label htmlFor="question" className="sr-only">Your question</label>
             <div className="rounded-2xl border border-[#e7e5ed] bg-[#fdfdfc] p-3 transition-colors focus-within:border-[#b9a7fb] focus-within:ring-2 focus-within:ring-[#7854f6]/10">
               <textarea
                 id="question"
                 value={question}
                 onChange={(event) => setQuestion(event.target.value)}
-                placeholder="Who has hosted events near Old Street?"
-                rows={3}
+                placeholder={turns.length ? "Ask a follow-up, e.g. which is closest to Liverpool Street?" : "I need a room for 80 people on Saturday near Old Street"}
+                rows={turns.length ? 2 : 3}
                 maxLength={1000}
                 className="min-h-20 w-full resize-y bg-transparent px-2 py-1 text-base leading-7 text-[#30303a] outline-none placeholder:text-[#a3a1aa]"
               />
@@ -243,50 +391,12 @@ export function AskPanel() {
                     className="h-11 gap-2 rounded-xl bg-[#7854f6] px-4 text-white hover:bg-[#6842eb]"
                   >
                     {loading ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
-                    <span>{loading ? "Asking…" : "Ask Lumap"}</span>
+                    <span>{loading ? "Asking…" : turns.length ? "Follow up" : "Ask Lumap"}</span>
                   </Button>
                 </div>
               </div>
             </div>
           </form>
-
-          {error && (
-            <p role="alert" className="mt-4 rounded-xl border border-[#f2d6d3] bg-[#fff8f7] px-4 py-3 text-sm text-[#9e4038]">
-              {error}
-            </p>
-          )}
-
-          {response && (
-            <section aria-live="polite" className="mt-7 space-y-5">
-              {response.answer ? (
-                <div className="rounded-2xl bg-[#faf9ff] p-5 sm:p-6">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#8473c2]">Answer</p>
-                  <Answer text={response.answer} />
-                </div>
-              ) : (
-                <p className="rounded-2xl bg-[#faf9ff] p-5 text-sm leading-6 text-[#6f6d78]">
-                  I couldn’t find an answer in the shared community memory.
-                </p>
-              )}
-
-              {sources.length > 0 ? (
-                <div className="rounded-2xl border border-[#ecebf0] p-5 sm:p-6">
-                  <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#45434e]">
-                    <BookOpenText className="h-4 w-4 text-[#7854f6]" aria-hidden="true" />
-                    Sources
-                  </h2>
-                  <ul className="flex flex-wrap gap-2">
-                    {sources.map((source, index) => (
-                      <li key={index} className="rounded-full border border-[#e4ddfc] bg-[#faf9ff] px-3 py-1.5 text-[13px] leading-5 text-[#5f5d6a]">
-                        {source}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </section>
-          )}
-        
           </motion.aside>
         ) : null}
       </AnimatePresence>

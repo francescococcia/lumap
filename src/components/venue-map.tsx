@@ -36,7 +36,7 @@ if (typeof document !== "undefined" && !document.getElementById("lumap-pin-css")
 }
 
 function pinColor(status: string | null) {
-  return status === "pending" ? "#e39b2b" : "#2faf78";
+  return status === "pending" ? "#e39b2b" : status === "suggested" ? "#7854f6" : "#2faf78";
 }
 
 export function VenueMap({ pins, center, selectedId, onSelect }: VenueMapProps) {

@@ -30,8 +30,8 @@ export async function POST(request: Request): Promise<Response> {
   const question = typeof body === "object" && body !== null && "question" in body
     ? (body as { question?: unknown }).question
     : undefined;
-  if (typeof question !== "string" || !question.trim() || question.length > 1000) {
-    return Response.json({ error: "Enter a question under 1,000 characters." }, { status: 400 });
+  if (typeof question !== "string" || !question.trim() || question.length > 4000) {
+    return Response.json({ error: "Enter a question under 4,000 characters." }, { status: 400 });
   }
 
   const result = await askCognee(question.trim());

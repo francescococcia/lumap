@@ -10,6 +10,7 @@ import { VenueMap, type MapPin } from "@/components/venue-map";
 import { LONDON_AREAS, LONDON_CENTER, SEARCH_RADIUS_M, type LondonArea } from "@/lib/areas";
 import { getSupabase } from "@/lib/supabase";
 import { CHANGE_EVENT, listVenues } from "@/lib/pending-venues";
+import { ASK_VENUES_EVENT, FOCUS_VENUE_EVENT } from "@/components/ask-panel";
 
 export type VenueHit = {
   id: string;
@@ -116,7 +117,27 @@ export function VenueHome() {
       window.removeEventListener("storage", load);
     };
   }, []);
-  const allResults = useMemo(() => [...localVenues.filter((v) => !results.some((r) => r.id === v.id)), ...results], [localVenues, results]);
+  const [askVenues, setAskVenues] = useState<VenueHit[]>([]);
+  const [askOpen, setAskOpen] = useState(false);
+  useEffect(() => {
+    const onOpen = (e: Event) => setAskOpen(Boolean((e as CustomEvent<boolean>).detail));
+    window.addEventListener("lumap:ask-open", onOpen);
+    return () => window.removeEventListener("lumap:ask-open", onOpen);
+  }, []);
+  useEffect(() => {
+    const onVenues = (e: Event) => setAskVenues((e as CustomEvent<VenueHit[]>).detail ?? []);
+    const onFocus = (e: Event) => setSelectedId((e as CustomEvent<string>).detail);
+    window.addEventListener(ASK_VENUES_EVENT, onVenues);
+    window.addEventListener(FOCUS_VENUE_EVENT, onFocus);
+    return () => {
+      window.removeEventListener(ASK_VENUES_EVENT, onVenues);
+      window.removeEventListener(FOCUS_VENUE_EVENT, onFocus);
+    };
+  }, []);
+  const allResults = useMemo(() => {
+    const seen = new Set<string>();
+    return [...askVenues, ...localVenues, ...results].filter((v) => (seen.has(v.id) ? false : (seen.add(v.id), true)));
+  }, [askVenues, localVenues, results]);
 
   const autoSearched = useRef(false);
   useEffect(() => {
@@ -257,14 +278,14 @@ export function VenueHome() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 40 }}
             transition={{ type: "spring", stiffness: 280, damping: 30 }}
-            className="absolute top-4 right-14 bottom-4 z-20 flex w-[min(100%-2rem,360px)] flex-col overflow-auto rounded-[24px] border border-[#ecebf0] bg-white/95 shadow-[0_20px_60px_rgba(32,32,42,0.14)] backdrop-blur-md"
+            className={`absolute top-4 bottom-4 z-20 flex w-[min(100%-2rem,360px)] flex-col overflow-auto rounded-[24px] border border-[#ecebf0] bg-white/95 shadow-[0_20px_60px_rgba(32,32,42,0.14)] backdrop-blur-md transition-[right] duration-300 ${askOpen ? "right-[470px]" : "right-14"}`}
           >
             <div className="relative h-28 shrink-0 bg-gradient-to-br from-[#efe9ff] via-[#f6f2ff] to-[#e6f7ef]">
               <button onClick={() => setSelectedId(null)} aria-label="Close venue panel" className="absolute top-3 right-3 rounded-full bg-white/90 p-1.5 text-[#6f6d78] shadow-sm hover:text-[#20202a]">
                 <X className="h-4 w-4" />
               </button>
-              <span className={`absolute bottom-3 left-5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${selected.status === "pending" ? "bg-[#fff4e0] text-[#a86a10]" : "bg-[#e6f7ef] text-[#1f7a52]"}`}>
-                <ShieldCheck className="h-3.5 w-3.5" /> {selected.status === "pending" ? "Pending vouches" : "Vouched by organisers"}
+              <span className={`absolute bottom-3 left-5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${selected.status === "pending" ? "bg-[#fff4e0] text-[#a86a10]" : selected.status === "suggested" ? "bg-[#f0ebff] text-[#5a3fd6]" : "bg-[#e6f7ef] text-[#1f7a52]"}`}>
+                <ShieldCheck className="h-3.5 w-3.5" /> {selected.status === "pending" ? "Pending vouches" : selected.status === "suggested" ? "Suggested by Ask Lumap" : "Vouched by organisers"}
               </span>
             </div>
             <div className="flex flex-col gap-4 p-5">
