@@ -3,3 +3,6 @@ description: Hackathon project context
 alwaysApply: true
 ---
 This is a hackathon project with a hard code freeze tonight. Read `knowledge/idea.md`, `knowledge/judging.md` and `knowledge/sponsors.md` before planning. Follow `AGENTS.md`. Keep scope tiny and demo-first.
+
+- Light theme only, matching docs/lumap-mockup.jpg. Use shadcn/ui, Magic UI or Aceternity, and Framer Motion. Do not write or run tests.
+

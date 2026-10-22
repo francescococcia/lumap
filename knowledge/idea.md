@@ -17,7 +17,7 @@ The track scores four things, and every feature below maps to one of them:
    - Root organisers are 2–3 named leads seeded at setup (listed in `config/city.json`).
    - An approved organiser can vouch for a new one. Only vouched organisers can insert or edit venues (RLS policy).
    - A vouch can be revoked, and the revoked organiser's pending edits are hidden.
-   - A SQL test proves an unvouched insert fails.
+   - The live junk-post block in the UI is the proof. Don't write or run tests tonight.
 4. **Ask in chat**: "free space for 80 next Thursday evening near Old Street" is parsed into capacity, date, area and needs, then answered with a PostGIS radius filter, capacity and hours, ranked by past hosts. It returns the top 3, each with a reason ("hosted Founders Club, 90 people, in Sept; free for communities; projector"), plus a drafted request email.
 5. **The map (core, it's the name)**: Leaflet with OpenStreetMap tiles. Every venue is a pin, sized by capacity and coloured by trust (vouched or pending). A chat answer draws the search radius and highlights the top 3 pins. Clicking a pin shows capacity, hours, AV and past hosts. About 30 minutes of work, built from the same PostGIS query.
 6. **Public feed**: one ranked London events page plus a public `.ics` feed built from Luma and hosted_events, updating live.
@@ -50,13 +50,16 @@ Chat surface: a Discord bot if it works by 20:45. Otherwise a web chat box on th
 - **Voice ask**: a hold-to-talk mic in the chat. The recording is transcribed and sent through the same parser, and the live transcript appears as the user speaks. Timebox: 20 min at 21:20. Fallback: typing.
 
 ## UI/UX direction
-**One screen, map first.** A full-bleed dark map (CARTO Dark Matter or Mapbox dark tiles) takes the whole page, with a floating glass chat panel on the left (backdrop blur, rounded 20px).
+**Mockup: `docs/lumap-mockup.jpg`** (venues and names in it are example data).
+
+**LIGHT THEME ONLY, no dark colours.** One screen, map first: a full-bleed light pastel map (CARTO Positron or MapLibre light style: light grey streets, pale blue river, soft green parks), off-white background #FAFAF7, white cards, and a floating white chat panel on the left (soft shadow, subtle blur, rounded 20px).
 - **Pins**: glowing dots sized by capacity. Green means vouched and amber means pending. Top-3 results pulse and get numbered badges 1, 2, 3.
 - **The search moment**: when a question is sent, the map flies to the area, a radius circle draws itself, the pins drop in one by one, and a stopwatch chip shows "found in 2.4s". This is the money shot.
 - **Result cards**: in the chat, with a venue photo or initials, "fits 80 · open Thu 18–22 · projector", a "hosted by" row with community avatars, and a "Why this?" line from Cognee. Then the buttons "Draft request" and "Show on map".
 - **Trust made visible**: each venue shows "vouched by A, B" as small avatar chips. A blocked junk post shakes the form and shows a red toast: "Only vouched organisers can post. Ask an organiser to vouch for you."
 - **Voice**: a big mic button with a live waveform and a transcript typing itself into the input.
-- **Look**: one accent colour (electric violet #7C5CFF) on near-black, Inter or Geist font, generous spacing, shadcn/ui components, Framer Motion for the fly-to and the pin drops.
+- **Look**: electric violet #7C5CFF accent with mint green and amber for pin states, on off-white. Inter or Geist font, generous spacing.
+- **Use ready-made components, don't hand-roll them**: shadcn/ui as the base (cards, buttons, inputs, toasts via Sonner). Magic UI or Aceternity UI for showy pieces (animated list for the result cards, number ticker for the 'found in' stopwatch, shimmer button). Framer Motion (`motion`) for the fly-to, pin drops, card stagger and the junk-post shake. lucide-react for icons.
 - **Top bar**: Lumap logo (a pin made of an "L"), city switcher (London, from `city.json`), "Add venue", "Events", and a ".ics" subscribe button.
 - **Empty state**: three suggested prompts as chips ("80 people near Old Street, Thursday", "Free weekend space in Shoreditch", "Who hosts AI meetups?").
 
