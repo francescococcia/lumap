@@ -1,50 +1,55 @@
-﻿# Idea: "Mate" (working name)
+# Lumate (working name): the open venue DB London organisers keep together
 
-- **Track:** 4 - Open Venue & Events DB (see `track-open-venue-db.md`)
-- **One-line pitch:** One open database and one chat mate that finds organisers a free venue in seconds, then fills the room by pinging the people whose interests match the event.
-- **Whose pain, today:**
-  - Organisers: finding a free evening/weekend venue is the hardest job; the knowledge lives in people's heads and WhatsApp asks.
-  - Attendees (students, people interested in X): scroll Luma, Meetup, Devpost and many groups and still miss the right events.
-- **The 10x:** venue search from days of asking around to seconds in chat with a drafted request; event promotion from posting everywhere to automatically reaching matched people.
-- **Demo moment:** (1) two organisers in the room add real venues; (2) a third asks "free space for 80 people next Thursday evening near Old Street?", gets ranked venues with reasons and sends the drafted request; (3) they publish the event and a student's Discord pings "AI agents night Thursday, 10 min from you" and their calendar updates.
-- **Where Grok Bot holds context:** shared organiser/venue/community knowledge and the reasoning behind each venue pick and attendee match.
-- **What Cursor builds:** schema, venue seed + ingest, venue search chat, organiser flow, matching, Discord bot, .ics feed.
-- **Sponsor tech used:** Supabase (DB, auth, RLS, PostGIS, pgvector), Cognee (optional memory for the shared agent), Zero (optional organiser outreach), Notion (optional public view).
+## Pitch (one line)
+Organisers who trust each other share the venues they've actually used, and any of them can ask in chat "free space for 80 next Thursday near Old Street?" and get a real answer with a drafted request in seconds.
 
-## Part 1 - Organiser side (track core, build first)
-- Venue DB: name, address, geo (PostGIS), capacity, AV, evening_ok, weekend_ok, terms (free/paid), contact, communities that hosted there.
-- Trust model: only approved organisers write; organisers vouch for each other (Supabase RLS).
-- Seed: venues from past London Luma events (geo_address_info) + OpenStreetMap/Overture; enrich by organisers live.
-- Venue search chat: natural-language ask -> filters (capacity, date/time, area) + PostGIS distance -> ranked venues with reasons + drafted booking request.
+## Why this wins Track 4
+The track scores four things, and every feature below maps to one of them:
+1. **Real venues entered tonight**: real organisers in the room add venues they've used, with their names shown.
+2. **A trust model that stops junk**: a vouch chain enforced by Supabase row-level security (RLS), with an unvouched post blocked live.
+3. **How fast a venue is found**: one chat question returns ranked venues with reasons.
+4. **Would three leads post tomorrow**: those three leads are named and on screen.
 
-## Part 2 - Attendee side (fills the room)
-- Events ingested from Luma discover feed (+ Devpost/BuilderBase/MLH if time), linked to community and venue.
-- Profiles: interests in a sentence (+ area, availability), embedding.
-- Matching: embedding similarity + time/location -> reason line; Discord DM via official API + personal .ics feed. New event -> notify matched people.
+## The core (the only things we build)
+1. **Venue database (Supabase + PostGIS)**: name, address, lat/lng, capacity, AV, evening/weekend hours, free or paid terms, contact, notes.
+2. **hosted_events**: which community ran what at which venue, seeded from the Luma London discover feed (no key needed). This is the "who hosted where" memory, so we don't need Cognee.
+3. **Trust model**:
+   - Root organisers are 2–3 named leads seeded at setup (listed in `config/city.json`).
+   - An approved organiser can vouch for a new one. Only vouched organisers can insert or edit venues (RLS policy).
+   - A vouch can be revoked, and the revoked organiser's pending edits are hidden.
+   - A SQL test proves an unvouched insert fails.
+4. **Ask in chat**: "free space for 80 next Thursday evening near Old Street" is parsed into capacity, date, area and needs, then answered with a PostGIS radius filter, capacity and hours, ranked by past hosts. It returns the top 3, each with a reason ("hosted Founders Club, 90 people, in Sept; free for communities; projector"), plus a drafted request email.
+5. **Public feed**: one ranked London events page plus a public `.ics` feed built from Luma and hosted_events, updating live.
 
-## Schema sketch (Supabase)
-- `organisers` (user_id, name, community_id, approved, vouched_by[])
-- `communities` (id, name, luma_calendar_id, description, size, audience, contact)
-- `venues` (id, name, address, geo, capacity, av, evening_ok, weekend_ok, terms, contact, added_by, verified)
-- `venue_hosts` (venue_id, community_id, event_id)
-- `events` (id, source, source_id, title, description, start_at, end_at, url, community_id, venue_id, guest_count, embedding)
-- `profiles` (id, display_name, interests_text, embedding, area_geo, availability, discord_user_id, ics_token)
-- `matches` (profile_id, event_id, score, reason, notified_at)
+Chat surface: a Discord bot if it works by 20:45. Otherwise a web chat box on the same page, with the same logic either way.
 
-## Build order (code freeze 21:50)
-- [ ] By 19:40 - Supabase schema + venue seed from Luma event addresses
-- [ ] By 20:30 - venue search chat (near me, capacity, time) with reasons + drafted request
-- [ ] By 21:00 - organiser add-venue + vouch flow
-- [ ] By 21:30 - attendee interests + matching + Discord ping (cut first if behind)
-- [ ] By 21:50 - backup demo video, push public GitHub repo (MIT licence in place)
+## The demo script (3 minutes, matches the track's winning demo)
+- 0:00 The problem: "the hardest job a London organiser has is finding a free room, and the answer lives in WhatsApp DMs."
+- 0:20 Organisers A and B (real people from tonight) have already added venues, and their names are on screen.
+- 0:45 Stranger C tries to post a fake venue and the database refuses it. That's the trust model.
+- 1:15 Organiser D asks the chat question and gets 3 ranked venues with reasons, with the time shown on screen.
+- 2:00 D sends the drafted request, and the events feed and `.ics` update.
+- 2:30 It's open source, `git clone` plus one command with a city config, so Manchester can run it next week.
+- 2:50 Close: "three London leads have already posted. They're [names]." Only say this if it's true.
 
-## Cut list
-- No WhatsApp (unofficial libs break ToS). No Meetup scraping unless time. No mobile app.
+## Build order to freeze (21:50)
+- **19:45** Schema, RLS vouch policies, SQL test, Luma seed of hosted_events
+- **20:00** Walk the room: get 3 organisers to add 10–15 real venues (form or chat)
+- **20:30** Chat search with ranked reasons and a drafted request
+- **20:45** Decide: Discord bot or web chat fallback
+- **21:00** Add-venue and vouch/revoke flow
+- **21:20** Ranked events page and public `.ics`
+- **21:35** Record the backup demo video
+- **21:45** Push the public GitHub repo (MIT, README, one-command seed, `.env.example`, city config)
 
-## Risks
-- Need real venues entered tonight: line up 2-3 leads in the room to add theirs live.
-- Luma discover API is undocumented: cache results, keep a saved snapshot for the demo.
+## Cut (stretch only if the core is done)
+Attendee matching, pgvector, DMs, personal `.ics`, voice notes/Whisper, Cognee, Zero outreach, Overture/OSM seeding, Meetup/Devpost/BuilderBase ingestion, WhatsApp, mobile app.
+
+## Open questions for tonight
+- Which 3 organisers in the room will add venues? (Ask at 20:00.)
+- Who are the root organisers in the config?
 
 ## Decisions log
-- 19:00 - Chose track 4 with an attendee-first "Mate" angle (Francesco).
-- 19:05 - Reframed: organiser venue finder is the core, attendee matching closes the loop (Francesco).
+- 19:00 Chose track 4.
+- 19:05 Reframed to venue-first.
+- 19:16 The judge panel scored v2 at 54/100. Cut the attendee side, voice and Cognee, and rebuilt around the track's demo script and real venues entered tonight.
