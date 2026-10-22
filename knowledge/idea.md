@@ -28,22 +28,31 @@ Chat surface: a Discord bot if it works by 20:45. Otherwise a web chat box on th
 - 0:20 Organisers A and B (real people from tonight) have already added venues, and their names are on screen.
 - 0:45 Stranger C tries to post a fake venue and the database refuses it. That's the trust model.
 - 1:15 Organiser D asks the chat question and gets 3 ranked venues with reasons, with the time shown on screen.
-- 2:00 D sends the drafted request, and the events feed and `.ics` update.
+- 2:00 D sends the request to a demo inbox. The venue owner accepts, a tentative event is inserted, and the feed and `.ics` update.
 - 2:30 It's open source, `git clone` plus one command with a city config, so Manchester can run it next week.
 - 2:50 Close: "three London leads have already posted. They're [names]." Only say this if it's true.
 
 ## Build order to freeze (21:50)
-- **19:45** Schema, RLS vouch policies, SQL test, Luma seed of hosted_events
-- **20:00** Walk the room: get 3 organisers to add 10–15 real venues (form or chat)
-- **20:30** Chat search with ranked reasons and a drafted request
-- **20:45** Decide: Discord bot or web chat fallback
-- **21:00** Add-venue and vouch/revoke flow
+- **19:45** Schema, RLS vouch policies, SQL test, Luma snapshot saved into the repo seed
+- **19:50** Bare add-venue path is live (a plain insert form, or a shared sheet the seed script imports). The 3 organisers are pre-added as roots in `city.json`.
+- **19:50–20:10** Walk the room: 3 organisers add 10–15 real venues. Get consent to show their names, and ask each one "would you post your venues here tomorrow?" so you can quote their answer.
+- **20:30** Chat search with ranked reasons and a drafted request (LLM parse with a regex fallback). Decide then: Discord or web chat.
+- **21:00** Vouch/revoke flow in the UI, with a readable "not vouched" error
 - **21:20** Ranked events page and public `.ics`
 - **21:35** Record the backup demo video
 - **21:45** Push the public GitHub repo (MIT, README, one-command seed, `.env.example`, city config)
 
 ## Cut (stretch only if the core is done)
 Attendee matching, pgvector, DMs, personal `.ics`, voice notes/Whisper, Cognee, Zero outreach, Overture/OSM seeding, Meetup/Devpost/BuilderBase ingestion, WhatsApp, mobile app.
+
+## Honesty and safety rules (from the judges)
+- Never say "free". Say "open then, fits 80, hosted similar events, confirm availability".
+- "Send request" goes to a demo inbox or a mailto link. Never ping real venue contacts on stage.
+- The feed and `.ics` update only because the venue owner accepts, which inserts a tentative event. Otherwise drop that link from the demo.
+- RLS hides the contact column from unvouched users.
+- Real contacts are never committed. The repo seed uses sample data, plus a script that loads the private sheet.
+- Demo the junk block in the app UI, not in a SQL console. Rehearse the script twice.
+- Bonus if ahead at 21:20: a communities page generated from hosted_events.
 
 ## Open questions for tonight
 - Which 3 organisers in the room will add venues? (Ask at 20:00.)
@@ -53,3 +62,4 @@ Attendee matching, pgvector, DMs, personal `.ics`, voice notes/Whisper, Cognee, 
 - 19:00 Chose track 4.
 - 19:05 Reframed to venue-first.
 - 19:16 The judge panel scored v2 at 54/100. Cut the attendee side, voice and Cognee, and rebuilt around the track's demo script and real venues entered tonight.
+- 19:18 The judges re-scored it at 71/100. Fixed the data-capture order, made the demo truthful, and reduced the dependence on external services (target about 80).
