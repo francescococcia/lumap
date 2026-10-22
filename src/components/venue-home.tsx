@@ -37,6 +37,8 @@ const DAYS = [
 const fieldClass =
   "h-11 w-full rounded-xl border border-[#e8e7ed] bg-white px-3 text-sm font-medium text-[#20202a] shadow-[0_1px_2px_rgba(32,32,42,0.04)] outline-none transition-all hover:border-[#cfc4fb] focus:border-[#b9a7fb] focus:ring-4 focus:ring-[#7854f6]/10";
 
+const ANY_AREA = "__any__";
+
 export function VenueHome() {
   const [areaName, setAreaName] = useState(LONDON_AREAS[0].name);
   const [capacity, setCapacity] = useState("80");
@@ -51,9 +53,14 @@ export function VenueHome() {
   const [vouched, setVouched] = useState<Record<string, boolean>>({});
   const [requested, setRequested] = useState<Record<string, boolean>>({});
 
-  async function onSubmit(event?: React.FormEvent) {
+  const [areaSuggestions, setAreaSuggestions] = useState<{ name: string; count: number; maxCap: number | null }[]>([]);
+
+  async function onSubmit(event?: React.FormEvent, overrideArea?: string) {
     event?.preventDefault();
-    const area = LONDON_AREAS.find((item) => item.name === areaName) as LondonArea;
+    const chosen = overrideArea ?? areaName;
+    if (chosen === ANY_AREA) return suggestAreas();
+    setAreaSuggestions([]);
+    const area = LONDON_AREAS.find((item) => item.name === chosen) as LondonArea;
     const minCapacity = capacity.trim() === "" ? null : Number(capacity);
     if (minCapacity !== null && (!Number.isFinite(minCapacity) || minCapacity < 0)) {
       setError("Capacity needs to be a number.");
@@ -81,6 +88,55 @@ export function VenueHome() {
       } else {
         setResults((data ?? []) as VenueHit[]);
       }
+      setSearched(true);
+    } catch (caught) {
+      setResults([]);
+      setError(caught instanceof Error ? caught.message : "Search failed.");
+      setSearched(true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function suggestAreas() {
+    const minCapacity = capacity.trim() === "" ? null : Number(capacity);
+    setLoading(true);
+    setError(null);
+    setSelectedId(null);
+    try {
+      const supabase = getSupabase();
+      const perArea = await Promise.all(
+        LONDON_AREAS.map(async (area) => {
+          const { data } = await supabase.rpc("search_venues", {
+            lat: area.lat,
+            lng: area.lng,
+            radius_m: SEARCH_RADIUS_M,
+            min_capacity: minCapacity,
+            day_of_week: day || null,
+            start_time: time || null,
+            max_results: 5,
+          });
+          return { area, hits: (data ?? []) as VenueHit[] };
+        }),
+      );
+      const local = listVenues().filter((v) => v.status === "verified" && (minCapacity == null || (v.capacity ?? 0) >= minCapacity));
+      const stats = perArea
+        .map(({ area, hits }) => {
+          const extra = local.filter((v) => v.area === area.name).length;
+          const caps = hits.map((h) => h.capacity ?? 0);
+          return { name: area.name, count: hits.length + extra, maxCap: caps.length ? Math.max(...caps) : null };
+        })
+        .filter((s) => s.count > 0)
+        .sort((a, b) => b.count - a.count || (b.maxCap ?? 0) - (a.maxCap ?? 0));
+      setAreaSuggestions(stats);
+      const seen = new Set<string>();
+      const ordered = [...perArea]
+        .sort((a, b) => stats.findIndex((s) => s.name === a.area.name) - stats.findIndex((s) => s.name === b.area.name))
+        .flatMap((p) => p.hits)
+        .filter((v) => (seen.has(v.id) ? false : (seen.add(v.id), true)));
+      setResults(ordered);
+      const top = LONDON_AREAS.find((a) => a.name === stats[0]?.name);
+      setCenter(top ?? LONDON_CENTER);
       setSearched(true);
     } catch (caught) {
       setResults([]);
@@ -178,11 +234,14 @@ export function VenueHome() {
         <form className="grid gap-3" onSubmit={onSubmit}>
           <div className="grid gap-1.5 text-sm font-medium text-[#30303a]">
             <span>Area</span>
-            <FancySelect label="Area" icon={<MapPinIcon className="h-4 w-4" />} value={areaName} onChange={setAreaName} options={LONDON_AREAS.map((area) => ({ value: area.name, label: area.name }))} />
+            <FancySelect label="Area" icon={<MapPinIcon className="h-4 w-4" />} value={areaName} onChange={setAreaName} options={[{ value: ANY_AREA, label: "Anywhere, suggest an area" }, ...LONDON_AREAS.map((area) => ({ value: area.name, label: area.name }))]} />
           </div>
           <div className="grid gap-1.5 text-sm font-medium text-[#30303a]">
             <span>Capacity</span>
             <Stepper label="Capacity" value={capacity} onChange={setCapacity} />
+            <button type="button" onClick={() => setCapacity(capacity === "" ? "60" : "")} className="mt-1.5 text-xs font-medium text-[#7854f6] hover:underline">
+              {capacity === "" ? "Set a headcount" : "Not sure yet? Show any size"}
+            </button>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 grid gap-1.5 text-sm font-medium text-[#30303a]">
@@ -233,6 +292,18 @@ export function VenueHome() {
               ))
             : null}
           <AnimatePresence>
+          {areaSuggestions.length ? (
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-[#e4ddfc] bg-[#faf9ff] p-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#8473c2]">Suggested areas</p>
+              <div className="flex flex-wrap gap-1.5">
+                {areaSuggestions.map((s, i) => (
+                  <button key={s.name} type="button" onClick={() => { setAreaName(s.name); void onSubmit(undefined, s.name); }} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${i === 0 ? "bg-[#7854f6] !text-white" : "bg-white text-[#5a3fd6] ring-1 ring-[#e4ddfc] hover:bg-[#f0ebff]"}`}>
+                    {i === 0 ? "Best: " : ""}{s.name} · {s.count} {s.count === 1 ? "room" : "rooms"}{s.maxCap ? `, up to ${s.maxCap}` : ""}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          ) : null}
           {allResults.map((venue, index) => (
             <motion.button
               type="button"
