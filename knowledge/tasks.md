@@ -5,11 +5,11 @@ Tasks in the same lane must run in order. Tasks in different lanes (DB, UI) can 
 Each task should take about 10–20 minutes. If a task grows bigger, split it into new cards instead of continuing.
 
 ## Setup checklist (do before DB1, about 10 minutes)
-- [ ] **S1 Supabase project**: create it at supabase.com, then turn on the `postgis` extension (Database > Extensions).
-- [ ] **S2 .env**: copy `.env.example` to `.env` and fill in `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (seed only, never commit it) and `LLM_API_KEY`.
-- [ ] **S3 Supabase MCP in Cursor**: so agents can run SQL and inspect tables themselves.
+- [x] **S1 Supabase project**: create it at supabase.com, then turn on the `postgis` extension (Database > Extensions).
+- [x] **S2 .env**: copy `.env.example` to `.env` and fill in `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (seed only, never commit it) and `LLM_API_KEY`.
+- [x] **S3 Supabase MCP in Cursor**: so agents can run SQL and inspect tables themselves.
 - [ ] **S4 (optional) shadcn MCP and Magic UI MCP in Cursor**: so agents pull real components.
-- [ ] **S5 GitHub**: create an empty public repo `lumap`, then `git remote add origin ...` and `git push -u origin main`.
+- [x] **S5 GitHub**: create an empty public repo `lumap`, then `git remote add origin ...` and `git push -u origin main`.
 - [ ] **S6 Cognee (for X1)**: a Cognee Cloud key in `.env` as `COGNEE_API_KEY`, or `pip install cognee` (uses `LLM_API_KEY`).
 - Map: MapLibre with CARTO Positron or OpenFreeMap tiles. No key.
 - Voice: the browser's built-in Web Speech API in Chrome. No key, no Whisper.
@@ -39,5 +39,6 @@ Each task should take about 10–20 minutes. If a task grows bigger, split it in
 - [ ] **X3 Ship**: README with a one-command setup, city config doc, public GitHub push.
 
 ## Notes
+- S1–S5: Supabase project ref `hkqeybcshbqrwsislgkq` (eu-west-2, PostGIS on). GitHub: https://github.com/francescococcia/lumap
 - DB3 (hackbot): seed/ has the Luma snapshot from 22 Oct with 59 upcoming events, 34 with addresses, and 32 candidate venues (status pending, max_guest_count_lower_bound isn't real capacity). There's no personal host info. The DB1 seed script should load seed/venues-candidates.json and seed/hosted_events.json. Venues collected in the room tonight are the main data.
 - Events (hackbot): seed/events-all.json has 95 events from Luma, Meetup, BuilderBase, MLH and Devpost, ranked with reasons[]. For W4, hide events that already started (or give 'happening now' zero recency points), or tonight's events crowd the top. Never commit a raw/ folder.
