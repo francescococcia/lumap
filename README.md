@@ -1,60 +1,62 @@
 # Lumap
 
-**Pitch:** London organisers share venue knowledge and discover ranked community events in one place.
+**An open venue map for London community organisers.** Find a room that fits your group, see which venues other organisers have vouched for, ask the city's community memory, and subscribe to a ranked feed of local events.
 
-## Screenshot
+**Live demo:** [lumap-self.vercel.app](https://lumap-self.vercel.app)
 
-<!-- Replace this placeholder with a screenshot of the running app. -->
-[Screenshot placeholder — add an image at docs/screenshot.png.]
+Built at the Grok Bot Community Engineering London Hackathon (22 Oct 2026), Track 4: Open Venue & Events DB.
+
+![Lumap: venue search with pins and the venue panel](docs/screenshot.png)
+
+## What it does
+
+- **Find a room.** Pick an area, capacity, day and time. Lumap searches venues within walking distance (PostGIS) and returns the best three, with a plain-English reason for each match.
+- **Map and venue panel.** Results drop onto a MapLibre map as numbered pins. Click a pin or a card to fly to it and open a panel with capacity, distance, trust status, why it matches, a vouch button and directions.
+- **Vouch-based trust.** New venues stay pending until trusted organisers vouch for them. The Add venue form shows this flow.
+- **Ask Lumap.** Ask questions in text or by voice (Web Speech API). Answers come from Cognee community memory, with their sources.
+- **Events feed.** `/api/calendar.ics` serves a ranked London community events feed that you can subscribe to from any calendar app.
 
 ## Stack
 
-- TypeScript and Next.js App Router for server-side routes, including the calendar feed.
-- Tailwind CSS, shadcn/ui, Motion, and lucide-react for the interface.
-- Supabase Postgres with PostGIS and row-level security for shared venue data and location search.
-- Cognee for community memory; the included loader and search helper use the Cognee API.
+- Next.js 15 (App Router) and TypeScript
+- Tailwind CSS v4, shadcn/ui, Motion and lucide-react, with a light theme
+- MapLibre GL 4 with CARTO Positron tiles
+- Supabase Postgres with PostGIS and row-level security
+- Cognee Cloud for community memory, plus an xAI (Grok) LLM
+- Deployed on Vercel
 
 ## Vouch trust model
 
-The city starts with a small set of trusted root organisers. An approved organiser can vouch for another organiser. Only vouched organisers should be able to add or edit venue records; Supabase row-level security enforces those writes. Unvouched users do not see venue contact details. If a vouch is revoked, edits from that organiser can be hidden from the shared venue list.
+The city starts with a small set of trusted root organisers. An approved organiser can vouch for another organiser, and only vouched organisers can add or edit venue records. Row-level security in Supabase enforces this (see `supabase/policies.sql`). Venues need two vouches before they appear publicly. Unvouched users never see venue contact details, and revoking a vouch hides that organiser's edits again.
 
-The root organiser list and database policies are the intended trust boundary. The RLS schema and policies are not yet included on this branch, so treat this description as the design rather than a claim that venue posting is already protected.
+In the hackathon demo, the database policies and search are live. The Add venue form and the vouch button in the venue panel are front-end only and don't write to the database yet.
 
-## Fork for another city
+## Data
 
-The current event snapshot is London-specific. To start a city fork:
+The venue records in the demo are clearly labelled **EXAMPLE** placeholders. No real venue contact details are published, and the events feed comes from public event listings (`seed/`).
 
-1. Add `config/city.json` with the city name, slug, map centre, and trusted root organiser IDs.
-2. Replace the London event and venue seeds with data for that city.
-3. Seed the root organisers, then apply the city's Supabase schema and RLS policies.
-4. Keep service credentials on the server and use only public, consented contact data.
+## Run it locally
 
-Example starting point:
+1. Copy `.env.example` to `.env` and fill in the values below.
+2. In the Supabase SQL editor, run `supabase/schema.sql`, `supabase/policies.sql`, `supabase/search.sql` and `supabase/seed.sql`, in that order.
+3. Optionally, load community memory with `python scripts/cognee_load.py`.
+4. Run `npm install` and then `npm run dev`, and open http://localhost:3000.
 
-```json
-{
-  "name": "Manchester",
-  "slug": "manchester",
-  "center": { "lat": 53.4808, "lng": -2.2426 },
-  "root_organisers": []
-}
-```
+### Environment variables
 
-This repository does not yet contain `config/city.json` or a config loader; the example shows the city settings a fork will need.
+Never commit real values.
 
-## Environment variables
+- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`: the browser search client
+- `SUPABASE_URL`, `SUPABASE_ANON_KEY`: server routes
+- `SUPABASE_SERVICE_ROLE_KEY`: seeding only; keep it off the server and out of Vercel
+- `LLM_API_KEY`: xAI (Grok)
+- `COGNEE_API_KEY`, `COGNEE_BASE_URL`, `COGNEE_TENANT_ID`
+- `COGNEE_DATASET`: optional; defaults to `lumap_london`
 
-Set these names in a local `.env` file. Never commit secret values.
+## Fork it for another city
 
-- `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY` (server/seed only)
-- `LLM_API_KEY`
-- `COGNEE_API_KEY`
-- `COGNEE_BASE_URL`
-- `COGNEE_TENANT_ID`
-- `COGNEE_DATASET` (optional; defaults to `lumap_london`)
+`config/city.json` holds the city name, slug, map centre and trusted root organisers. To start a fork, edit that file, replace the London seeds in `seed/` and `supabase/seed.sql`, add your root organisers, and apply the Supabase schema and policies.
 
-## Current scope
+## Licence
 
-This branch includes the ranked London event snapshot reader, the `.ics` generator and the `/api/calendar.ics` route, plus Cognee seed and search helpers. A complete local app setup command and the Supabase schema are still to be added.
+[MIT](LICENSE) © 2026 Francesco Coccia
