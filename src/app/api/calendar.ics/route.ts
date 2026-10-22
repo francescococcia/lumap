@@ -8,7 +8,7 @@ export function GET(): Response {
   return new Response(eventsToIcs(getEvents()), {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
-      "Content-Disposition": 'attachment; filename="lumap-london.ics"',
+      "Content-Disposition": 'inline; filename="lumap-london.ics"',
       "Cache-Control": "no-store",
     },
   });
