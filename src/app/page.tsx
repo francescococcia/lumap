@@ -1,4 +1,5 @@
-import { CalendarDays, ChevronDown, MapPin, Plus } from "lucide-react";
+import { CalendarDays, ChevronDown, MapPin } from "lucide-react";
+import { AddVenueDialog } from "@/components/add-venue-dialog";
 import { Button } from "@/components/ui/button";
 import { VenueHome } from "@/components/venue-home";
 
@@ -20,17 +21,16 @@ export default function Home() {
         <nav className="hidden items-center gap-8 text-sm font-medium text-[#484751] md:flex" aria-label="Main navigation">
           <a className="transition-colors hover:text-[#7854f6]" href="/events">Events feed</a>
           <a className="transition-colors hover:text-[#7854f6]" href="/ask">Ask</a>
-          <a className="transition-colors hover:text-[#7854f6]" href="/communities">Communities</a>
+          <a className="transition-colors hover:text-[#7854f6]" href="/api/calendar.ics">Calendar</a>
         </nav>
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="h-10 gap-2 rounded-xl border-[#e8e7ed] px-3.5 font-medium text-[#30303a] shadow-none">
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Add venue</span>
-          </Button>
-          <Button className="h-10 gap-2 rounded-xl bg-[#7854f6] px-3.5 font-medium text-white shadow-sm hover:bg-[#6842eb]">
+          <AddVenueDialog />
+          <Button asChild className="h-10 gap-2 rounded-xl bg-[#7854f6] px-3.5 font-medium text-white shadow-sm hover:bg-[#6842eb]">
+            <a href="/api/calendar.ics">
             <CalendarDays className="h-4 w-4" />
             <span className="hidden sm:inline">.ics Subscribe</span>
             <span className="sm:hidden">.ics</span>
+            </a>
           </Button>
         </div>
       </header>

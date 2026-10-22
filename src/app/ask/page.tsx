@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "motion/react";
 import { ArrowLeft, BookOpenText, LoaderCircle, Mic, Send, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -30,6 +31,40 @@ interface AskResponse {
   error?: string;
 }
 
+function inline(text: string) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    part.startsWith("**") && part.endsWith("**") ? <strong key={i} className="font-semibold text-[#20202a]">{part.slice(2, -2)}</strong> : part.replace(/[*_`]/g, ""),
+  );
+}
+
+function Answer({ text }: { text: string }) {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  return (
+    <div className="space-y-3 text-[16px] leading-[1.8] text-[#34323d]">
+      {lines.map((line, i) => (
+        <motion.div key={i} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i * 0.06, 0.9), duration: 0.35, ease: "easeOut" }}>
+          {renderLine(line, i)}
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
+function renderLine(line: string, i: number) {
+        const heading = /^#{1,6}\s+/.exec(line);
+        if (heading) return <p key={i} className="pt-1 font-semibold text-[#20202a]">{inline(line.slice(heading[0].length))}</p>;
+        const bullet = /^(?:[-*\u2022]|\d+[.)])\s+/.exec(line);
+        if (bullet) return <p key={i} className="flex gap-2 pl-1"><span className="mt-[11px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#7854f6]" />{<span>{inline(line.slice(bullet[0].length))}</span>}</p>;
+        return <p key={i}>{inline(line)}</p>;
+}
+
+function cleanSources(sources: string[]) {
+  const id = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
+  return Array.from(new Set(sources
+    .map((s) => s.replace(id, "").replace(/\b(chunk|id|node)[_ ]?(id)?\s*[:=]\s*\S*/gi, "").replace(/[*_`#\[\]()]/g, "").replace(/\s{2,}/g, " ").replace(/^[\s,:;\u00b7-]+|[\s,:;\u00b7-]+$/g, "").trim())
+    .filter((s) => s.length > 3 && /[a-z]{3}/i.test(s)))).slice(0, 6);
+}
+
 export default function AskPage() {
   const [question, setQuestion] = useState("");
   const [speechSupported, setSpeechSupported] = useState(false);
@@ -38,6 +73,7 @@ export default function AskPage() {
   const [response, setResponse] = useState<AskResponse | null>(null);
   const [error, setError] = useState("");
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const sources = useMemo(() => cleanSources(response?.sources ?? []), [response]);
 
   useEffect(() => {
     const speechWindow = window as SpeechWindow;
@@ -193,7 +229,7 @@ export default function AskPage() {
               {response.answer ? (
                 <div className="rounded-2xl bg-[#faf9ff] p-5 sm:p-6">
                   <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#8473c2]">Answer</p>
-                  <p className="whitespace-pre-wrap text-[15px] leading-7 text-[#34323d]">{response.answer}</p>
+                  <Answer text={response.answer} />
                 </div>
               ) : (
                 <p className="rounded-2xl bg-[#faf9ff] p-5 text-sm leading-6 text-[#6f6d78]">
@@ -201,21 +237,21 @@ export default function AskPage() {
                 </p>
               )}
 
-              {response.sources.length > 0 && (
+              {sources.length > 0 ? (
                 <div className="rounded-2xl border border-[#ecebf0] p-5 sm:p-6">
                   <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#45434e]">
                     <BookOpenText className="h-4 w-4 text-[#7854f6]" aria-hidden="true" />
                     Sources
                   </h2>
-                  <ul className="space-y-2">
-                    {response.sources.map((source, index) => (
-                      <li key={index} className="border-l-2 border-[#d9d0fb] pl-3 text-sm leading-6 text-[#6f6d78]">
+                  <ul className="flex flex-wrap gap-2">
+                    {sources.map((source, index) => (
+                      <li key={index} className="rounded-full border border-[#e4ddfc] bg-[#faf9ff] px-3 py-1.5 text-[13px] leading-5 text-[#5f5d6a]">
                         {source}
                       </li>
                     ))}
                   </ul>
                 </div>
-              )}
+              ) : null}
             </section>
           )}
         </section>

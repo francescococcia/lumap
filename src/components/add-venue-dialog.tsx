@@ -1,0 +1,132 @@
+"use client";
+
+import { FormEvent, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { CheckCircle2, Plus, ShieldCheck, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+const AREAS = ["Old Street", "Shoreditch", "Hackney", "King's Cross", "Camden", "Southwark", "Whitechapel", "Islington"];
+
+export function AddVenueDialog() {
+  const [open, setOpen] = useState(false);
+  const [submitted, setSubmitted] = useState<{ name: string; area: string } | null>(null);
+  const [name, setName] = useState("");
+  const [area, setArea] = useState(AREAS[0]);
+  const [capacity, setCapacity] = useState("60");
+  const [note, setNote] = useState("");
+
+  function close() {
+    setOpen(false);
+    setTimeout(() => {
+      setSubmitted(null);
+      setName("");
+      setNote("");
+    }, 250);
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!name.trim()) return;
+    setSubmitted({ name: name.trim(), area });
+  }
+
+  return (
+    <>
+      <Button
+        variant="outline"
+        onClick={() => setOpen(true)}
+        className="h-10 gap-2 rounded-xl border-[#e8e7ed] px-3.5 font-medium text-[#30303a] shadow-none"
+      >
+        <Plus className="h-4 w-4" />
+        <span className="hidden sm:inline">Add venue</span>
+      </Button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            className="fixed inset-0 z-[100] grid place-items-center bg-[#20202a]/20 p-4 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={close}
+          >
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Add a venue"
+              className="w-full max-w-md rounded-3xl border border-[#ecebf0] bg-white p-6 text-[#20202a] shadow-[0_24px_60px_rgba(35,30,65,0.15)]"
+              initial={{ opacity: 0, y: 16, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              transition={{ type: "spring", stiffness: 320, damping: 28 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-5 flex items-start justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8473c2]">Suggest a room</p>
+                  <h2 className="mt-1 text-xl font-semibold tracking-[-0.03em]">Add a venue</h2>
+                </div>
+                <button onClick={close} aria-label="Close" className="rounded-lg p-1.5 text-[#85838f] hover:bg-[#f4f3f7]">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {submitted ? (
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+                  <div className="flex items-start gap-3 rounded-2xl bg-[#f3fbf6] p-4">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[#2f9e62]" />
+                    <div>
+                      <p className="font-medium">{submitted.name} is pending in {submitted.area}</p>
+                      <p className="mt-1 text-sm leading-6 text-[#5f6b64]">
+                        It stays off the public map until 2 trusted organisers vouch for it.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 rounded-2xl bg-[#faf9ff] p-4">
+                    <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#7854f6]" />
+                    <p className="text-sm leading-6 text-[#5f5d6a]">
+                      Vouches come from organisers who have hosted there. One vouch revoked and it drops back to pending, so the map stays trustworthy.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-[#6f6d78]">
+                    <span className="h-2 w-2 rounded-full bg-[#f2b84b]" /> 0 of 2 vouches
+                  </div>
+                  <Button onClick={close} className="h-11 w-full rounded-xl bg-[#7854f6] text-white hover:bg-[#6842eb]">Done</Button>
+                </motion.div>
+              ) : (
+                <form onSubmit={submit} className="space-y-4">
+                  <label className="block text-sm font-medium">
+                    Venue name
+                    <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Hoxton Community Hall"
+                      className="mt-1.5 h-11 w-full rounded-xl border border-[#e7e5ed] px-3 font-normal outline-none focus:border-[#b9a7fb] focus:ring-2 focus:ring-[#7854f6]/10" />
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block text-sm font-medium">
+                      Area
+                      <select value={area} onChange={(e) => setArea(e.target.value)}
+                        className="mt-1.5 h-11 w-full rounded-xl border border-[#e7e5ed] bg-white px-3 font-normal outline-none focus:border-[#b9a7fb]">
+                        {AREAS.map((a) => <option key={a}>{a}</option>)}
+                      </select>
+                    </label>
+                    <label className="block text-sm font-medium">
+                      Capacity
+                      <input type="number" min={1} value={capacity} onChange={(e) => setCapacity(e.target.value)}
+                        className="mt-1.5 h-11 w-full rounded-xl border border-[#e7e5ed] px-3 font-normal outline-none focus:border-[#b9a7fb]" />
+                    </label>
+                  </div>
+                  <label className="block text-sm font-medium">
+                    Why it works for organisers
+                    <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="Free on Thursday evenings, step-free, projector"
+                      className="mt-1.5 w-full rounded-xl border border-[#e7e5ed] px-3 py-2 font-normal outline-none focus:border-[#b9a7fb]" />
+                  </label>
+                  <p className="text-xs leading-5 text-[#92909b]">No personal contact details. New venues need 2 vouches before they go public.</p>
+                  <Button type="submit" disabled={!name.trim()} className="h-11 w-full rounded-xl bg-[#7854f6] text-white hover:bg-[#6842eb]">Submit for vouching</Button>
+                </form>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
