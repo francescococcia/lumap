@@ -4,6 +4,16 @@ How this works: each agent takes ONE task, does only that, commits, ticks the bo
 Tasks in the same lane must run in order. Tasks in different lanes (DB, UI) can run in parallel in separate agents.
 Each task should take about 10–20 minutes. If a task grows bigger, split it into new cards instead of continuing.
 
+## Setup checklist (do before DB1, about 10 minutes)
+- [ ] **S1 Supabase project**: create it at supabase.com, then turn on the `postgis` extension (Database > Extensions).
+- [ ] **S2 .env**: copy `.env.example` to `.env` and fill in `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (seed only, never commit it) and `LLM_API_KEY`.
+- [ ] **S3 Supabase MCP in Cursor**: so agents can run SQL and inspect tables themselves.
+- [ ] **S4 (optional) shadcn MCP and Magic UI MCP in Cursor**: so agents pull real components.
+- [ ] **S5 GitHub**: create an empty public repo `lumap`, then `git remote add origin ...` and `git push -u origin main`.
+- [ ] **S6 Cognee (for X1)**: a Cognee Cloud key in `.env` as `COGNEE_API_KEY`, or `pip install cognee` (uses `LLM_API_KEY`).
+- Map: MapLibre with CARTO Positron or OpenFreeMap tiles. No key.
+- Voice: the browser's built-in Web Speech API in Chrome. No key, no Whisper.
+
 ## Lane DB (Supabase)
 - [ ] **DB1 Schema**: `supabase/schema.sql` with organisers, vouches, venues (PostGIS geography point), hosted_events, communities. Done when the SQL runs in the Supabase SQL editor.
 - [ ] **DB2 Trust rules**: RLS policies so only vouched organisers can insert or update venues, contact is hidden from unvouched users, and vouches can be revoked. Root organisers come from `config/city.json`. Done when the policies are in `supabase/policies.sql`.
@@ -25,7 +35,7 @@ Each task should take about 10–20 minutes. If a task grows bigger, split it in
 
 ## Lane Extra (only after W1–W3 work)
 - [ ] **X1 Cognee**: add hosted_events and notes, and use them for the "why this venue" line. Fallback: the SQL reason string.
-- [ ] **X2 Voice**: hold-to-talk mic, transcribe, fill the input. Fallback: typing.
+- [ ] **X2 Voice**: hold-to-talk mic using the browser Web Speech API, live transcript into the input. Fallback: typing.
 - [ ] **X3 Ship**: README with a one-command setup, city config doc, public GitHub push.
 
 ## Notes
