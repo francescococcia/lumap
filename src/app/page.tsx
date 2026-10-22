@@ -1,0 +1,46 @@
+import { CalendarDays, ChevronDown, MapPin, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+export default function Home() {
+  return (
+    <main className="min-h-screen bg-[#fafaf7] text-[#20202a]">
+      <header className="flex h-16 items-center justify-between border-b border-[#ecebf0] bg-white px-6 sm:px-10">
+        <div className="flex items-center gap-10">
+          <a href="/" className="flex items-center gap-2 text-[21px] font-semibold tracking-[-0.04em]" aria-label="Lumap home">
+            <MapPin className="h-8 w-8 fill-[#7854f6] text-[#7854f6] stroke-white" strokeWidth={2.5} />
+            <span>Lumap</span>
+          </a>
+          <Button variant="outline" className="h-10 gap-2 rounded-xl border-[#e8e7ed] px-3.5 font-medium text-[#30303a] shadow-none">
+            <MapPin className="h-4 w-4" />
+            London
+            <ChevronDown className="ml-1 h-4 w-4 text-[#85838f]" />
+          </Button>
+        </div>
+        <nav className="hidden items-center gap-8 text-sm font-medium text-[#484751] md:flex" aria-label="Main navigation">
+          <a className="transition-colors hover:text-[#7854f6]" href="/events">Events</a>
+          <a className="transition-colors hover:text-[#7854f6]" href="/communities">Communities</a>
+        </nav>
+        <div className="flex items-center gap-3">
+          <Button variant="outline" className="h-10 gap-2 rounded-xl border-[#e8e7ed] px-3.5 font-medium text-[#30303a] shadow-none">
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Add venue</span>
+          </Button>
+          <Button className="h-10 gap-2 rounded-xl bg-[#7854f6] px-3.5 font-medium text-white shadow-sm hover:bg-[#6842eb]">
+            <CalendarDays className="h-4 w-4" />
+            <span className="hidden sm:inline">.ics Subscribe</span>
+            <span className="sm:hidden">.ics</span>
+          </Button>
+        </div>
+      </header>
+      <section className="grid min-h-[calc(100vh-4rem)] place-items-center p-8 text-center">
+        <div className="max-w-md">
+          <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-[#f0ebff] text-[#7854f6]">
+            <MapPin className="h-7 w-7" />
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight">London’s community venue map</h1>
+          <p className="mt-2 text-sm leading-6 text-[#777580]">Find trusted spaces shared by the organisers who know them.</p>
+        </div>
+      </section>
+    </main>
+  );
+}
