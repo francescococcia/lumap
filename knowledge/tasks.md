@@ -1,0 +1,31 @@
+# Lumap build queue
+
+How this works: each agent takes ONE task, does only that, commits, ticks the box, writes one line under "Notes", and stops.
+Tasks in the same lane must run in order. Tasks in different lanes (DB, UI) can run in parallel in separate agents.
+Each task should take about 10–20 minutes. If a task grows bigger, split it into new cards instead of continuing.
+
+## Lane DB (Supabase)
+- [ ] **DB1 Schema**: `supabase/schema.sql` with organisers, vouches, venues (PostGIS geography point), hosted_events, communities. Done when the SQL runs in the Supabase SQL editor.
+- [ ] **DB2 Trust rules**: RLS policies so only vouched organisers can insert or update venues, contact is hidden from unvouched users, and vouches can be revoked. Root organisers come from `config/city.json`. Done when the policies are in `supabase/policies.sql`.
+- [ ] **DB3 Luma snapshot**: a script that fetches the Luma London discover feed once and saves `seed/luma-london.json`, then `seed/seed.ts` loads venues and hosted_events from it. Done when `npm run seed` fills the tables.
+- [ ] **DB4 Search query**: a Postgres function `search_venues(lat, lng, radius_m, min_capacity, day, time)` that returns the top 3 with a reason string. Done when it returns rows for Old Street, 80 people.
+
+## Lane UI (Next.js, light theme, match docs/lumap-mockup.jpg)
+- [ ] **UI1 Scaffold**: Next.js + Tailwind + shadcn/ui + motion + lucide-react. Top bar as in the mockup. Done when `npm run dev` shows the top bar.
+- [ ] **UI2 Map**: MapLibre light map of London with pins from mock data (green for vouched, amber for pending). Done when the pins show.
+- [ ] **UI3 Chat panel**: floating white panel, input with a mic icon, suggested prompt chips, result cards (Magic UI animated list). Mock data only. Done when it looks like the mockup.
+- [ ] **UI4 Search moment**: on submit, fly to the area, draw the radius, drop numbered pins 1–3, show the "found in Xs" ticker. Done when it animates with mock data.
+- [ ] **UI5 Add venue form**: shadcn form, with a shake plus a red toast when the post is rejected. Done when it submits to a stub.
+
+## Lane Wire (after DB4 and UI4)
+- [ ] **W1 Connect search**: parse the chat text into capacity, area, day and time (LLM with a regex fallback), call `search_venues`, render real results. Done when the Old Street question returns real venues.
+- [ ] **W2 Connect add venue**: insert through Supabase, so a vouched user succeeds and an unvouched user gets the readable error. Done when both cases work live.
+- [ ] **W3 Draft request**: the button opens a drafted email (mailto, or a demo inbox). Done when the draft opens.
+- [ ] **W4 Events feed and .ics**: `/events` page plus `/api/calendar.ics` from hosted_events. Done when the .ics downloads.
+
+## Lane Extra (only after W1–W3 work)
+- [ ] **X1 Cognee**: add hosted_events and notes, and use them for the "why this venue" line. Fallback: the SQL reason string.
+- [ ] **X2 Voice**: hold-to-talk mic, transcribe, fill the input. Fallback: typing.
+- [ ] **X3 Ship**: README with a one-command setup, city config doc, public GitHub push.
+
+## Notes
