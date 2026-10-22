@@ -20,6 +20,7 @@ export async function askCognee(question: string): Promise<string | null> {
       body: JSON.stringify({
         query: question,
         search_type: "GRAPH_COMPLETION",
+        include_references: true,
         datasets: [DATASET],
       }),
       signal: AbortSignal.timeout(12000),
@@ -35,3 +36,4 @@ export async function askCognee(question: string): Promise<string | null> {
     return null;
   }
 }
+
