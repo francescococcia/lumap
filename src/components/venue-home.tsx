@@ -136,8 +136,10 @@ export function VenueHome() {
   }, []);
   const allResults = useMemo(() => {
     const seen = new Set<string>();
-    return [...askVenues, ...localVenues, ...results].filter((v) => (seen.has(v.id) ? false : (seen.add(v.id), true)));
-  }, [askVenues, localVenues, results]);
+    const need = Number(capacity) || 0;
+    const fits = (v: VenueHit) => v.capacity == null || v.capacity >= need;
+    return [...askVenues, ...localVenues.filter(fits), ...results.filter(fits)].filter((v) => (seen.has(v.id) ? false : (seen.add(v.id), true)));
+  }, [askVenues, localVenues, results, capacity]);
 
   const autoSearched = useRef(false);
   useEffect(() => {
