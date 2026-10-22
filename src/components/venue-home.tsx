@@ -229,6 +229,9 @@ export function VenueHome() {
             <a className="text-[#7854f6] hover:underline" href="/events">
               Events feed
             </a>
+            <a className="text-[#7854f6] hover:underline" href="/ask">
+              Ask
+            </a>
           </nav>
         </div>
         <form className="grid gap-3" onSubmit={onSubmit}>

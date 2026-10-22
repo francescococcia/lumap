@@ -21,6 +21,7 @@ export default function Home() {
         </div>
         <nav className="hidden items-center gap-8 text-sm font-medium text-[#484751] md:flex" aria-label="Main navigation">
           <a className="transition-colors hover:text-[#7854f6]" href="/events">Events feed</a>
+          <a className="transition-colors hover:text-[#7854f6]" href="/ask">Ask</a>
           <a className="transition-colors hover:text-[#7854f6]" href="/review">Review queue</a>
         </nav>
         <div className="flex items-center gap-3">
