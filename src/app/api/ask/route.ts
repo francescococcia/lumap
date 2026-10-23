@@ -66,5 +66,6 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  return Response.json(splitEvidence(result));
+  // The model writes non-breaking hyphens (U+2011), which break URLs like luma.com/london-oct-23.
+  return Response.json(splitEvidence(result.replace(/[\u2010\u2011]/g, "-")));
 }
