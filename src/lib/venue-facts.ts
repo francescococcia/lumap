@@ -77,6 +77,8 @@ export type Session = {
   start_time: string;
   end_time: string;
   cadence: string | null;
+  /** A known date of a fortnightly session (YYYY-MM-DD), so other dates can be computed. */
+  anchor_date?: string | null;
   price: string | null;
   rsvp: string | null;
   url: string | null;

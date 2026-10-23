@@ -104,6 +104,7 @@
       "start_time": "19:00",
       "end_time": "22:00",
       "cadence": "every other Monday",
+      "anchor_date": "2026-11-02",
       "price": "Free, snacks and drinks provided",
       "rsvp": "See the Newspeak House calendar",
       "url": "https://newspeak.house/events",

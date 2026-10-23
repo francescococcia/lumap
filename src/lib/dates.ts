@@ -66,7 +66,7 @@ const ORD: Record<string, number> = { "1st": 1, first: 1, "2nd": 2, second: 2, "
  * "no" when the weekday or the nth-weekday rule doesn't match,
  * "check" when the cadence can't be pinned down (fortnightly without a start date, "dates on Luma").
  */
-export function sessionOnDate(s: { day_of_week: DayKey; cadence?: string | null }, iso: string): "yes" | "no" | "check" {
+export function sessionOnDate(s: { day_of_week: DayKey; cadence?: string | null; anchor_date?: string | null }, iso: string): "yes" | "no" | "check" {
   if (weekdayOf(iso) !== s.day_of_week) return "no";
   const c = (s.cadence ?? "").trim().toLowerCase();
   if (!c || /^weekly$|every week/.test(c)) return "yes";
@@ -75,6 +75,10 @@ export function sessionOnDate(s: { day_of_week: DayKey; cadence?: string | null 
   if (nth) {
     if (nth[1] === "last") return addDays(iso, 7).slice(5, 7) !== iso.slice(5, 7) ? "yes" : "no";
     return Math.ceil(d / 7) === ORD[nth[1]] ? "yes" : "no";
+  }
+  if (/every other|fortnight|bi-?weekly/.test(c) && s.anchor_date) {
+    const days = Math.round((Date.parse(`${iso}T12:00:00Z`) - Date.parse(`${s.anchor_date}T12:00:00Z`)) / 86400000);
+    return ((days % 14) + 14) % 14 === 0 ? "yes" : "no";
   }
   return "check";
 }
