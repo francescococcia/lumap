@@ -1,4 +1,4 @@
-import { CalendarDays, ChevronDown, MapPin } from "lucide-react";
+import { ChevronDown, MapPin } from "lucide-react";
 import { AddVenueDialog } from "@/components/add-venue-dialog";
 import { AskPanel } from "@/components/ask-panel";
 import { AuthMenu } from "@/components/auth-menu";
@@ -20,13 +20,10 @@ export default function Home() {
             <ChevronDown className="ml-1 h-4 w-4 text-[#85838f]" />
           </Button>
         </div>
-        <nav className="hidden items-center gap-8 text-sm font-medium text-[#484751] md:flex" aria-label="Main navigation">
-          <a className="transition-colors hover:text-[#7854f6]" href="/?for=cowork">Cowork with others</a>
-          <a className="transition-colors hover:text-[#7854f6]" href="/events">Events feed</a>
-          <a className="transition-colors hover:text-[#7854f6]" href="/ask">Ask</a>
-          <a className="transition-colors hover:text-[#7854f6]" href="/review">Review queue</a>
-        </nav>
         <div className="flex items-center gap-3">
+          <a href="/review" className="hidden h-10 items-center rounded-xl px-3 text-sm font-medium !text-[#484751] transition-colors hover:bg-[#f4f3f7] hover:!text-[#7854f6] sm:inline-flex">
+            Review queue
+          </a>
           <AddVenueDialog />
           <AuthMenu />
         </div>
