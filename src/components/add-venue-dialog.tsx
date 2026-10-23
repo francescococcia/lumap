@@ -12,7 +12,9 @@ const AREAS = LONDON_AREAS.map((a) => a.name);
 
 export function AddVenueDialog() {
   const [open, setOpen] = useState(false);
-  const [submitted, setSubmitted] = useState<{ name: string; area: string } | null>(null);
+  const [submitted, setSubmitted] = useState<{ name: string; area: string; local?: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [area, setArea] = useState(AREAS[0]);
   const [capacity, setCapacity] = useState("60");
@@ -23,17 +25,22 @@ export function AddVenueDialog() {
     setOpen(false);
     setTimeout(() => {
       setSubmitted(null);
+      setError(null);
       setName("");
       setNote("");
       setAddress("");
     }, 250);
   }
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!name.trim()) return;
-    addVenue({ name: name.trim(), address: address.trim(), area, capacity: Number(capacity) || null, note: note.trim() });
-    setSubmitted({ name: name.trim(), area });
+    if (!name.trim() || busy) return;
+    setBusy(true);
+    setError(null);
+    const res = await addVenue({ name: name.trim(), address: address.trim(), area, capacity: Number(capacity) || null, note: note.trim() });
+    setBusy(false);
+    if (!res.ok) return setError(res.error);
+    setSubmitted({ name: name.trim(), area, local: res.local });
   }
 
   return (
@@ -86,19 +93,20 @@ export function AddVenueDialog() {
                       <p className="mt-1 text-sm leading-6 text-[#5f6b64]">
                         It stays off the public map until 2 trusted organisers vouch for it.
                       </p>
+                      {submitted.local ? <p className="mt-1 text-sm leading-6 text-[#a86a10]">You look offline, so it's saved on this device only for now.</p> : null}
                     </div>
                   </div>
                   <div className="flex items-start gap-3 rounded-2xl bg-[#faf9ff] p-4">
                     <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#7854f6]" />
                     <p className="text-sm leading-6 text-[#5f5d6a]">
-                      Vouches come from organisers who have hosted there. One vouch revoked and it drops back to pending, so the map stays trustworthy.
+                      Vouches come from organisers who have hosted there. Everyone sees the same review queue, and each browser can vote once.
                     </p>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-[#6f6d78]">
                     <span className="h-2 w-2 rounded-full bg-[#f2b84b]" /> 0 of 2 vouches
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <a href="/review" className="inline-flex h-11 items-center justify-center rounded-xl border border-[#e2dcf7] text-sm font-medium text-[#5a3fd6] hover:bg-[#faf9ff]">Open review queue</a>
+                    <a href="/review" className="inline-flex h-11 items-center justify-center rounded-xl border border-[#e2dcf7] text-sm font-medium !text-[#5a3fd6] hover:bg-[#faf9ff]">Open review queue</a>
                     <Button onClick={close} className="h-11 rounded-xl bg-[#7854f6] text-white hover:bg-[#6842eb]">Done</Button>
                   </div>
                 </motion.div>
@@ -106,12 +114,12 @@ export function AddVenueDialog() {
                 <form onSubmit={submit} className="space-y-4">
                   <label className="block text-sm font-medium">
                     Venue name
-                    <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Hoxton Community Hall"
+                    <input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required placeholder="e.g. Hoxton Community Hall"
                       className="mt-1.5 h-11 w-full rounded-xl border border-[#e7e5ed] px-3 font-normal outline-none focus:border-[#b9a7fb] focus:ring-2 focus:ring-[#7854f6]/10" />
                   </label>
                   <label className="block text-sm font-medium">
                     Street address
-                    <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="e.g. 133 Bethnal Green Rd, E2 7DG"
+                    <input value={address} onChange={(e) => setAddress(e.target.value)} maxLength={200} placeholder="e.g. 133 Bethnal Green Rd, E2 7DG"
                       className="mt-1.5 h-11 w-full rounded-xl border border-[#e7e5ed] px-3 font-normal outline-none focus:border-[#b9a7fb] focus:ring-2 focus:ring-[#7854f6]/10" />
                   </label>
                   <div className="grid gap-3">
@@ -126,11 +134,12 @@ export function AddVenueDialog() {
                   </div>
                   <label className="block text-sm font-medium">
                     Why it works for organisers
-                    <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="Free on Thursday evenings, step-free, projector"
+                    <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={3} placeholder="Free on Thursday evenings, step-free, projector"
                       className="mt-1.5 w-full rounded-xl border border-[#e7e5ed] px-3 py-2 font-normal outline-none focus:border-[#b9a7fb]" />
                   </label>
                   <p className="text-xs leading-5 text-[#92909b]">No personal contact details. New venues need 2 vouches before they go public.</p>
-                  <Button type="submit" disabled={!name.trim()} className="h-11 w-full rounded-xl bg-[#7854f6] text-white hover:bg-[#6842eb]">Submit for vouching</Button>
+                  {error ? <p role="alert" className="rounded-xl bg-[#fff6f5] px-3 py-2 text-sm text-[#9e4038]">{error}</p> : null}
+                  <Button type="submit" disabled={!name.trim() || busy} className="h-11 w-full rounded-xl bg-[#7854f6] text-white hover:bg-[#6842eb]">Submit for vouching</Button>
                 </form>
               )}
             </motion.div>
