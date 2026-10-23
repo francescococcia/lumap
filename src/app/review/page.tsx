@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, CheckCircle2, ShieldCheck, Undo2, Users, X } from "lucide-react";
+import { listSessions, rejectSession, revokeSession, SESSIONS_CHANGE_EVENT, vouchSession, type PendingSession } from "@/lib/pending-sessions";
+import { DAY_LABEL } from "@/lib/hours";
 import { CHANGE_EVENT, listVenues, rejectVenue, revokeVenue, vouchVenue, VOUCHES_NEEDED, type PendingVenue } from "@/lib/pending-venues";
 
 export default function ReviewPage() {
@@ -17,6 +19,20 @@ export default function ReviewPage() {
       window.removeEventListener("storage", load);
     };
   }, []);
+
+  const [sessions, setSessions] = useState<PendingSession[]>([]);
+  useEffect(() => {
+    const load = () => setSessions(listSessions());
+    load();
+    window.addEventListener(SESSIONS_CHANGE_EVENT, load);
+    window.addEventListener("storage", load);
+    return () => {
+      window.removeEventListener(SESSIONS_CHANGE_EVENT, load);
+      window.removeEventListener("storage", load);
+    };
+  }, []);
+  const pendingSessions = sessions.filter((s) => s.status === "pending");
+  const doneSessions = sessions.filter((s) => s.status !== "pending");
 
   const pending = venues.filter((v) => v.status === "pending");
   const done = venues.filter((v) => v.status !== "pending");
@@ -69,6 +85,61 @@ export default function ReviewPage() {
             ))}
           </AnimatePresence>
         </div>
+
+        <h2 className="mt-8 mb-3 text-sm font-semibold text-[#45434e]">Cowork sessions waiting for vouches ({pendingSessions.length})</h2>
+        {pendingSessions.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-[#e2dff0] bg-white p-6 text-center text-sm text-[#85838f]">
+            No sessions to review. Use <strong>Host a cowork session</strong> under "Cowork with others" to invite people to work alongside you.
+          </p>
+        ) : null}
+        <div className="grid gap-3">
+          <AnimatePresence>
+            {pendingSessions.map((s) => (
+              <motion.article key={s.id} layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: 40 }} className="rounded-2xl border border-[#ecebf0] bg-white p-5 shadow-[0_1px_2px_rgba(32,32,42,0.04)]">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#8473c2]">Cowork session</p>
+                    <h3 className="font-semibold">{s.title}</h3>
+                    <p className="mt-0.5 text-sm text-[#6f6d78]">Every {DAY_LABEL[s.day_of_week]} {s.start_time}–{s.end_time} · {[s.venue_name, s.address, s.area].filter(Boolean).join(", ")}</p>
+                    <p className="mt-0.5 text-xs text-[#85838f]">{[s.organiser, s.price].filter(Boolean).join(" · ")}</p>
+                    {s.url ? <a href={s.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs font-medium text-[#7854f6] hover:underline">{s.url}</a> : null}
+                    {s.note ? <p className="mt-2 text-sm leading-6 text-[#484751]">{s.note}</p> : null}
+                  </div>
+                  <span className="shrink-0 rounded-full bg-[#fff4e0] px-2.5 py-1 text-xs font-semibold text-[#a86a10]">{s.vouches} of {VOUCHES_NEEDED} vouches</span>
+                </div>
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#f1eff6]">
+                  <motion.div className="h-full rounded-full bg-[#7854f6]" animate={{ width: `${(s.vouches / VOUCHES_NEEDED) * 100}%` }} />
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <button type="button" onClick={() => vouchSession(s.id)} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-[#7854f6] text-sm font-medium !text-white hover:bg-[#6842eb]">
+                    <ShieldCheck className="h-4 w-4" /> Vouch, I know this session
+                  </button>
+                  <button type="button" onClick={() => rejectSession(s.id)} className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#e8e7ed] px-4 text-sm font-medium text-[#6f6d78] hover:bg-[#fff6f5] hover:text-[#9e4038]">
+                    <X className="h-4 w-4" /> Reject
+                  </button>
+                </div>
+              </motion.article>
+            ))}
+          </AnimatePresence>
+        </div>
+        {doneSessions.length ? (
+          <div className="mt-3 grid gap-2">
+            {doneSessions.map((s) => (
+              <div key={s.id} className="flex items-center justify-between rounded-2xl border border-[#ecebf0] bg-white px-4 py-3">
+                <div className="flex items-center gap-2 text-sm">
+                  {s.status === "verified" ? <CheckCircle2 className="h-4 w-4 text-[#2f9e62]" /> : <X className="h-4 w-4 text-[#9e4038]" />}
+                  <span className="font-medium">{s.title}</span>
+                  <span className="text-[#85838f]">{s.status === "verified" ? "in the cowork list" : "rejected"}</span>
+                </div>
+                {s.status === "verified" ? (
+                  <button type="button" onClick={() => revokeSession(s.id)} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-[#6f6d78] hover:bg-[#f4f3f7]">
+                    <Undo2 className="h-3.5 w-3.5" /> Revoke a vouch
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
 
         {done.length ? (
           <>
