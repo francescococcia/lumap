@@ -50,7 +50,8 @@ function bold(text: string, key: string) {
 }
 
 // Bold plus [label](url) and bare URLs as new-tab links.
-function inline(text: string) {
+function inline(raw: string) {
+  const text = raw.replace(/<(https?:\/\/[^>\s]+)>/g, "$1");
   const out: React.ReactNode[] = [];
   let last = 0;
   for (const m of text.matchAll(LINK_RE)) {
@@ -133,6 +134,15 @@ async function extractVenues(answer: string): Promise<AskVenue[]> {
     const line = stripMd(raw);
     const pc = POSTCODE.exec(line);
     if (!pc) return;
+    // Markdown table row: first cell is the venue, the cell with the postcode is the address.
+    if (raw.startsWith("|")) {
+      const cells = raw.split("|").map((c) => stripMd(c).replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/[“”"]/g, "").trim()).filter(Boolean);
+      const name = (cells[0] ?? "").split(/\s+[–—-]\s+/)[0].trim();
+      const address = cells.find((c) => POSTCODE.test(c)) ?? "";
+      const rowPc = POSTCODE.exec(address);
+      if (name && rowPc && name.length <= 40 && !found.some((f) => f.name === name)) found.push({ name, address, postcode: rowPc[1].toUpperCase(), details: cells.slice(1).filter((c) => c !== address) });
+      return;
+    }
     const parts = line.split(/\s+[\u2013\u2014-]\s+|:\s+/);
     let name = parts.length > 1 ? parts[0] : line.split(",")[0];
     let address = parts.length > 1 ? parts.slice(1).join(", ") : line;
