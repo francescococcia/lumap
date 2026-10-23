@@ -33,7 +33,7 @@ In the hackathon demo, the database policies and search are live. The Add venue 
 
 ## Data
 
-The venue records in the demo are clearly labelled **EXAMPLE** placeholders. No real venue contact details are published, and the events feed comes from public event listings (`seed/`).
+The old **EXAMPLE** venues have been removed. Venue types, hours and capacity come only from public pages (venue websites, Luma, listing sites), with every source URL kept in `src/data/venue-facts.json`. Recurring sessions such as Co-Working Fridays at Somerset House are in `src/data/recurring-sessions.json`. No venue contact details are published, and the events feed comes from public event listings (`seed/`). The three trust roots in `config/city.json` are still placeholder accounts.
 
 ## Run it locally
 
