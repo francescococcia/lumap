@@ -47,9 +47,9 @@ def sql_uuid(value: str) -> str:
 
 
 def main() -> None:
-    city = json.loads(CITY_PATH.read_text())
-    venues_doc = json.loads(VENUES_PATH.read_text())
-    events = json.loads(EVENTS_PATH.read_text())
+    city = json.loads(CITY_PATH.read_text(encoding="utf-8"))
+    venues_doc = json.loads(VENUES_PATH.read_text(encoding="utf-8"))
+    events = json.loads(EVENTS_PATH.read_text(encoding="utf-8"))
     roots = city["roots"]
     if len(roots) < 2:
         raise SystemExit("config/city.json needs at least two roots")
@@ -181,7 +181,7 @@ def main() -> None:
         "commit;",
         "",
     ]
-    OUT_PATH.write_text("\n".join(lines))
+    OUT_PATH.write_text("\n".join(lines), encoding="utf-8")
     print(f"wrote {OUT_PATH} ({len(lines)} lines)")
 
 
