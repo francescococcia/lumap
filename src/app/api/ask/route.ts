@@ -2,6 +2,9 @@ import { askCognee } from "../../../../scripts/cognee_search";
 import { coworkWeek, coworkSessions, isWeekly } from "../../../lib/cowork";
 import { sessionLink } from "../../../lib/links";
 
+// Keeps answers to what the stored documents say: no guessed capacities, addresses or prices.
+const GROUNDING =
+  "Only state facts written in the retrieved documents. If a capacity, address, price, time or other detail is not written there, say 'not listed'. Never estimate or infer one, for example a capacity from past event attendance. Do not invent venues, addresses or numbers.";
 const COWORK_Q = /co-?work|work (alongside|with|next to)|deep work|founders?|desk|laptop/i;
 
 // If Cognee is slow or down, answer coworking questions from the bundled public sessions.
@@ -54,9 +57,9 @@ export async function POST(request: Request): Promise<Response> {
   // Statements like "I'm a founder and want to…" get small talk back from the graph,
   // so coworking questions are sent as an explicit request for venues and sessions.
   const cowork = COWORK_Q.test(question);
-  const query = cowork
+  const query = (cowork
     ? `${question.trim()}\n\nList the specific London venues and recurring sessions that fit: name, day, time, address with postcode, price and how to register.`
-    : question.trim();
+    : question.trim()) + `\n\n${GROUNDING}`;
   let result = await askCognee(query);
   if (cowork && (!result || result.length < 200)) result = coworkFallback();
   if (!result) {
