@@ -12,6 +12,9 @@ export type MapPin = {
   lat: number;
   lng: number;
   status: string | null;
+  fit?: "covers" | "unknown" | "ask";
+  kind?: string;
+  note?: string;
 };
 
 type VenueMapProps = {
@@ -19,6 +22,9 @@ type VenueMapProps = {
   center: { lat: number; lng: number };
   selectedId?: string | null;
   onSelect?: (id: string) => void;
+  hoveredId?: string | null;
+  onHover?: (id: string | null) => void;
+  fitKey?: number;
 };
 
 if (typeof document !== "undefined" && !document.getElementById("lumap-pin-css")) {
@@ -30,22 +36,40 @@ if (typeof document !== "undefined" && !document.getElementById("lumap-pin-css")
 .lumap-pin { cursor: pointer; }
 .lumap-pin-dot { width: 28px; height: 28px; border-radius: 999px; border: 3px solid #fff; color: #fff; font: 600 12px/22px system-ui, sans-serif; text-align: center; box-shadow: 0 4px 12px rgba(32,32,42,0.25); transition: transform .2s ease, background .2s ease; animation: lumapPinIn .55s cubic-bezier(.2,.8,.2,1) both; }
 .lumap-pin:hover .lumap-pin-dot { transform: scale(1.15); }
-.lumap-pin.is-selected .lumap-pin-dot { background: #7854f6 !important; transform: scale(1.25); animation: lumapPulse 1.4s ease-out infinite; }
+.lumap-pin.is-selected .lumap-pin-dot { transform: scale(1.25); animation: lumapPulse 1.4s ease-out infinite; border-color: #7854f6; }
+.lumap-pin.is-hover .lumap-pin-dot { transform: scale(1.2); }
+.lumap-pin.is-pending .lumap-pin-dot { border-style: dashed; }
+.lumap-pin-tip { position: absolute; bottom: 36px; left: 50%; transform: translate(-50%, 4px); white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .15s ease, transform .15s ease; background: #fff; color: #20202a; border: 1px solid #ecebf0; border-radius: 12px; padding: 6px 10px; font: 500 12px/1.35 system-ui, sans-serif; box-shadow: 0 8px 24px rgba(32,32,42,0.12); }
+.lumap-pin-tip b { display: block; font-weight: 600; }
+.lumap-pin-tip span { color: #6f6d78; }
+.lumap-pin:hover .lumap-pin-tip, .lumap-pin.is-hover .lumap-pin-tip, .lumap-pin.is-selected .lumap-pin-tip { opacity: 1; transform: translate(-50%, 0); }
+.lumap-pin:hover, .lumap-pin.is-hover, .lumap-pin.is-selected { z-index: 5; }
 `;
   document.head.appendChild(style);
 }
 
-function pinColor(status: string | null) {
-  return status === "pending" ? "#e39b2b" : status === "suggested" ? "#7854f6" : "#2faf78";
+export const FIT_COLOR = { covers: "#2faf78", unknown: "#e39b2b", ask: "#7854f6" } as const;
+
+function pinColor(pin: MapPin) {
+  if (pin.fit) return FIT_COLOR[pin.fit];
+  return pin.status === "pending" ? "#e39b2b" : pin.status === "suggested" ? "#7854f6" : "#2faf78";
 }
 
-export function VenueMap({ pins, center, selectedId, onSelect }: VenueMapProps) {
+function fitPadding() {
+  const wide = typeof window !== "undefined" && window.innerWidth > 900;
+  return wide ? { top: 80, bottom: 110, left: 430, right: 90 } : 60;
+}
+
+export function VenueMap({ pins, center, selectedId, onSelect, hoveredId, onHover, fitKey }: VenueMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const initialCenter = useRef(center);
+  const loadedRef = useRef(false);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  const onHoverRef = useRef(onHover);
+  onHoverRef.current = onHover;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -58,6 +82,9 @@ export function VenueMap({ pins, center, selectedId, onSelect }: VenueMapProps) 
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     mapRef.current = map;
+    map.once("load", () => {
+      loadedRef.current = true;
+    });
     return () => {
       markersRef.current.forEach((marker) => marker.remove());
       map.remove();
@@ -75,13 +102,24 @@ export function VenueMap({ pins, center, selectedId, onSelect }: VenueMapProps) 
         const el = document.createElement("div");
         el.className = "lumap-pin";
         el.dataset.id = pin.id;
-        el.title = pin.name;
+        if (pin.status === "pending") el.classList.add("is-pending");
+        el.setAttribute("aria-label", pin.name);
         const dot = document.createElement("div");
         dot.className = "lumap-pin-dot";
         dot.textContent = String(index + 1);
-        dot.style.background = pinColor(pin.status);
+        dot.style.background = pinColor(pin);
         dot.style.animationDelay = `${index * 0.12}s`;
         el.appendChild(dot);
+        const tip = document.createElement("div");
+        tip.className = "lumap-pin-tip";
+        const b = document.createElement("b");
+        b.textContent = pin.name.replace(/^EXAMPLE · /, "");
+        const line = document.createElement("span");
+        line.textContent = [pin.kind, pin.note].filter(Boolean).join(" · ");
+        tip.append(b, line);
+        el.appendChild(tip);
+        el.addEventListener("mouseenter", () => onHoverRef.current?.(pin.id));
+        el.addEventListener("mouseleave", () => onHoverRef.current?.(null));
         el.addEventListener("click", (event) => {
           event.stopPropagation();
           onSelectRef.current?.(pin.id);
@@ -92,13 +130,15 @@ export function VenueMap({ pins, center, selectedId, onSelect }: VenueMapProps) 
       if (pins.length > 0) {
         const bounds = new maplibregl.LngLatBounds();
         pins.forEach((pin) => bounds.extend([pin.lng, pin.lat]));
-        map.fitBounds(bounds, { padding: 72, maxZoom: 14, duration: 700 });
+        map.fitBounds(bounds, { padding: fitPadding(), maxZoom: 14, duration: 700 });
       } else {
         map.easeTo({ center: [center.lng, center.lat], zoom: 12, duration: 700 });
       }
     };
 
-    if (map.loaded()) draw();
+    // loaded() is false while tiles stream in, even after the first load,
+    // so remember the load event instead of asking every time.
+    if (loadedRef.current) draw();
     else map.once("load", draw);
   }, [pins, center]);
 
@@ -113,6 +153,22 @@ export function VenueMap({ pins, center, selectedId, onSelect }: VenueMapProps) 
       map.flyTo({ center: [pin.lng, pin.lat], zoom: 15, offset: [-120, 0], duration: 900, essential: true });
     }
   }, [selectedId, pins]);
+
+  useEffect(() => {
+    markersRef.current.forEach((marker) => {
+      const el = marker.getElement();
+      el.classList.toggle("is-hover", el.dataset.id === hoveredId);
+    });
+  }, [hoveredId, pins]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !fitKey || pins.length === 0) return;
+    const bounds = new maplibregl.LngLatBounds();
+    pins.forEach((pin) => bounds.extend([pin.lng, pin.lat]));
+    map.fitBounds(bounds, { padding: fitPadding(), maxZoom: 14, duration: 700 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitKey]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 }

@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Laptop, PartyPopper, Presentation, AlertCircle, CalendarDays, CheckCircle2, Lock, Mail, Clock, MapPin as MapPinIcon, Navigation, Search, ShieldCheck, Users, X } from "lucide-react";
+import { Maximize2, Laptop, PartyPopper, Presentation, AlertCircle, CalendarDays, CheckCircle2, Lock, Mail, Clock, MapPin as MapPinIcon, Navigation, Search, ShieldCheck, Users, X } from "lucide-react";
 import { FancySelect, Stepper } from "@/components/ui/fancy-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { VenueMap, type MapPin } from "@/components/venue-map";
+import { FIT_COLOR, VenueMap, type MapPin } from "@/components/venue-map";
 import { LONDON_AREAS, LONDON_CENTER, SEARCH_RADIUS_M, type LondonArea } from "@/lib/areas";
 import { getSupabase } from "@/lib/supabase";
 import { CHANGE_EVENT, listVenues } from "@/lib/pending-venues";
@@ -84,6 +84,8 @@ export function VenueHome() {
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [fitKey, setFitKey] = useState(0);
   const [vouched, setVouched] = useState<Record<string, boolean>>({});
   const [requested, setRequested] = useState<Record<string, boolean>>({});
 
@@ -274,16 +276,44 @@ export function VenueHome() {
         const lat = Number(venue.lat);
         const lng = Number(venue.lng);
         if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
-        return [{ id: venue.id, name: venue.name, lat, lng, status: venue.status }];
+        const fit = askIds.has(venue.id) ? ("ask" as const) : fitById[venue.id]?.state === "covers" ? ("covers" as const) : ("unknown" as const);
+        return [{ id: venue.id, name: venue.name, lat, lng, status: venue.status, fit, kind: KIND_LABEL[venueKind(venue)], note: fitById[venue.id]?.label }];
       }),
-    [visibleResults],
+    [visibleResults, askIds, fitById],
   );
   const selected = allResults.find((venue) => venue.id === selectedId) ?? null;
   const clean = (text: string | null) => (text ?? "").replace(/\u00c2/g, "");
 
   return (
     <div className="relative h-[calc(100vh-4rem)] min-h-[560px]">
-      <VenueMap pins={pins} center={center} selectedId={selectedId} onSelect={setSelectedId} />
+      <VenueMap pins={pins} center={center} selectedId={selectedId} onSelect={setSelectedId} hoveredId={hoveredId} onHover={setHoveredId} fitKey={fitKey} />
+      <AnimatePresence>
+        {pins.length ? (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            className="absolute bottom-6 left-1/2 z-10 flex -translate-x-1/2 items-center gap-3 rounded-full border border-[#ecebf0] bg-white/95 py-1.5 pr-1.5 pl-4 text-xs font-medium text-[#484751] shadow-[0_8px_24px_rgba(32,32,42,0.1)] backdrop-blur-sm max-md:hidden"
+          >
+            {[
+              { c: FIT_COLOR.covers, t: `Open ${DAY_LABEL[day as DayKey] ?? ""} ${time}–${endTime}` },
+              { c: FIT_COLOR.unknown, t: "Hours not listed" },
+              ...(askVenues.length ? [{ c: FIT_COLOR.ask, t: "From Ask" }] : []),
+            ].map((item) => (
+              <span key={item.t} className="inline-flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-full ring-2 ring-white" style={{ background: item.c, boxShadow: "0 0 0 1px #e4e2ea" }} />
+                {item.t}
+              </span>
+            ))}
+            <span className="inline-flex items-center gap-1.5 text-[#6f6d78]">
+              <span className="h-3 w-3 rounded-full border-2 border-dashed border-[#b8b5c2]" /> Pending vouches
+            </span>
+            <button type="button" onClick={() => setFitKey((k) => k + 1)} className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[#f0ebff] px-3 font-semibold text-[#5a3fd6] transition-colors hover:bg-[#e6defe]">
+              <Maximize2 className="h-3.5 w-3.5" /> Fit {pins.length} {pins.length === 1 ? "venue" : "venues"}
+            </button>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
       <section className="absolute top-4 left-4 z-10 flex max-h-[calc(100%-2rem)] w-[min(100%-2rem,380px)] flex-col gap-3 overflow-auto rounded-[20px] [scrollbar-width:thin] [scrollbar-color:#d9d4ea_transparent] border border-[#ecebf0] bg-white/95 p-4 shadow-[0_12px_40px_rgba(32,32,42,0.08)] backdrop-blur-sm">
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-lg font-semibold tracking-tight">Find a room</h1>
@@ -409,6 +439,8 @@ export function VenueHome() {
               type="button"
               key={venue.id}
               onClick={() => setSelectedId(venue.id)}
+              onMouseEnter={() => setHoveredId(venue.id)}
+              onMouseLeave={() => setHoveredId(null)}
               initial={{ opacity: 0, y: 18, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8 }}
@@ -417,10 +449,10 @@ export function VenueHome() {
               transition={{ type: "spring", stiffness: 300, damping: 26, delay: index * 0.1 }}
               className="text-left"
             >
-              <Card className={`transition-shadow ${selectedId === venue.id ? "border-[#7854f6] shadow-[0_0_0_3px_rgba(120,84,246,0.15)]" : "hover:shadow-md"}`}>
+              <Card className={`transition-shadow ${selectedId === venue.id ? "border-[#7854f6] shadow-[0_0_0_3px_rgba(120,84,246,0.15)]" : hoveredId === venue.id ? "border-[#cfc4fb] shadow-md" : "hover:shadow-md"}`}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#7854f6] text-xs font-semibold text-white">{index + 1}</span>
+                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold text-white" style={{ background: pins.find((p) => p.id === venue.id)?.fit ? FIT_COLOR[pins.find((p) => p.id === venue.id)!.fit!] : "#7854f6" }}>{index + 1}</span>
                     {venue.name}
                   </CardTitle>
                   <CardDescription>{clean(venue.address) || "London"}</CardDescription>
