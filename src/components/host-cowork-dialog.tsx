@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { CheckCircle2, Plus, ShieldCheck, X } from "lucide-react";
 import { LONDON_AREAS } from "@/lib/areas";
@@ -13,6 +14,8 @@ export function HostCoworkDialog() {
   const [open, setOpen] = useState(false);
   const [done, setDone] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [f, setF] = useState({ title: "", organiser: "", venue_name: "", address: "", area: LONDON_AREAS[0].name, day_of_week: "fri" as DayKey, start_time: "10:00", end_time: "17:00", price: "Free", url: "", note: "" });
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
 
@@ -38,7 +41,7 @@ export function HostCoworkDialog() {
       <button type="button" onClick={() => setOpen(true)} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#20202a] px-3 text-xs font-semibold !text-white hover:bg-[#383845]">
         <Plus className="h-3.5 w-3.5" /> Host a cowork session
       </button>
-      <AnimatePresence>
+      {mounted ? createPortal(<AnimatePresence>
         {open ? (
           <motion.div className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-[#20202a]/20 p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={close}>
             <motion.div role="dialog" aria-modal="true" aria-label="Host a cowork session" onClick={(e) => e.stopPropagation()}
@@ -93,7 +96,7 @@ export function HostCoworkDialog() {
             </motion.div>
           </motion.div>
         ) : null}
-      </AnimatePresence>
+      </AnimatePresence>, document.body) : null}
     </>
   );
 }

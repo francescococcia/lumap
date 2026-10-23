@@ -627,6 +627,7 @@ export function VenueHome() {
                 <h2 className="text-xl font-semibold tracking-[-0.02em] text-[#20202a]">{selected.name}</h2>
                 <p className="mt-1 flex items-start gap-1.5 text-sm text-[#6f6d78]"><MapPinIcon className="mt-0.5 h-4 w-4 shrink-0" />{clean(selected.address) || "London"}</p>
               </div>
+              <VenueLinks venue={selected} />
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-2xl bg-[#faf9ff] p-3"><p className="text-xs text-[#8a8894]">Capacity</p><p className="mt-0.5 flex items-center gap-1.5 font-semibold"><Users className="h-4 w-4 text-[#7854f6]" />{selected.capacity ?? "?"}</p></div>
                 <div className="rounded-2xl bg-[#faf9ff] p-3"><p className="text-xs text-[#8a8894]">Distance</p><p className="mt-0.5 flex items-center gap-1.5 font-semibold"><Navigation className="h-4 w-4 text-[#7854f6]" />{selected.distance_m != null ? `${Math.round(selected.distance_m)} m` : "?"}</p></div>
@@ -710,7 +711,6 @@ export function VenueHome() {
               >
                 {vouched[selected.id] ? <><CheckCircle2 className="mr-2 h-4 w-4" />You vouched for this venue</> : <><ShieldCheck className="mr-2 h-4 w-4" />I've hosted here, vouch</>}
               </Button>
-              <VenueLinks venue={selected} />
             </div>
           </motion.aside>
         ) : null}
