@@ -26,6 +26,8 @@ type VenueMapProps = {
   hoveredId?: string | null;
   onHover?: (id: string | null) => void;
   fitKey?: number;
+  /** When set, the next fit (fitKey change) frames only these pins. */
+  fitIds?: string[] | null;
   /** Where distances are measured from; drawn as a "You" (or area-centre) marker. */
   origin?: { lat: number; lng: number; label: string; kind: string } | null;
   /** When true, the next click on the map sets the origin. */
@@ -74,7 +76,7 @@ function fitPadding() {
   return wide ? { top: 80, bottom: 110, left: 430, right: 90 } : 60;
 }
 
-export function VenueMap({ pins, center, selectedId, onSelect, hoveredId, onHover, fitKey, origin, picking, onPick }: VenueMapProps) {
+export function VenueMap({ pins, center, selectedId, onSelect, hoveredId, onHover, fitKey, fitIds, origin, picking, onPick }: VenueMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
@@ -197,8 +199,9 @@ export function VenueMap({ pins, center, selectedId, onSelect, hoveredId, onHove
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !fitKey || pins.length === 0) return;
+    const only = fitIds?.length ? pins.filter((pin) => fitIds.includes(pin.id)) : [];
     const bounds = new maplibregl.LngLatBounds();
-    pins.forEach((pin) => bounds.extend([pin.lng, pin.lat]));
+    (only.length ? only : pins).forEach((pin) => bounds.extend([pin.lng, pin.lat]));
     map.fitBounds(bounds, { padding: fitPadding(), maxZoom: 14, duration: 700 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fitKey]);

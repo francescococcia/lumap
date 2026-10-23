@@ -10,7 +10,7 @@ import { FIT_COLOR, VenueMap, type MapPin } from "@/components/venue-map";
 import { LONDON_AREAS, LONDON_CENTER, SEARCH_RADIUS_M, type LondonArea } from "@/lib/areas";
 import { getSupabase } from "@/lib/supabase";
 import { CHANGE_EVENT, listVenues } from "@/lib/pending-venues";
-import { ASK_VENUES_EVENT, FOCUS_VENUE_EVENT } from "@/components/ask-panel";
+import { ASK_VENUES_EVENT, FIT_VENUES_EVENT, FOCUS_VENUE_EVENT } from "@/components/ask-panel";
 import { USE_CASES, kindScore, venueKind, type UseCaseId } from "@/lib/use-cases";
 import { CoworkWeek } from "@/components/cowork-week";
 import { coworkSessions, type CoworkItem } from "@/lib/cowork";
@@ -188,6 +188,7 @@ export function VenueHome() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [fitKey, setFitKey] = useState(0);
+  const [fitIds, setFitIds] = useState<string[] | null>(null);
   // Resume "vouch" / "share details" for a venue after the sign-in round trip.
   const [resumed, setResumed] = useState<{ venue: VenueHit; action: "vouch" | "report" | null } | null>(null);
   // Keeps the resumed venue selected through the first searches on load (they normally clear the selection).
@@ -400,11 +401,19 @@ export function VenueHome() {
   useEffect(() => {
     const onVenues = (e: Event) => setAskVenues((e as CustomEvent<VenueHit[]>).detail ?? []);
     const onFocus = (e: Event) => chooseVenue((e as CustomEvent<string>).detail);
+    // "Show all on map" from Ask: close any open venue and frame just those pins.
+    const onFit = (e: Event) => {
+      chooseVenue(null);
+      setFitIds((e as CustomEvent<string[]>).detail ?? null);
+      setFitKey((k) => k + 1);
+    };
     window.addEventListener(ASK_VENUES_EVENT, onVenues);
     window.addEventListener(FOCUS_VENUE_EVENT, onFocus);
+    window.addEventListener(FIT_VENUES_EVENT, onFit);
     return () => {
       window.removeEventListener(ASK_VENUES_EVENT, onVenues);
       window.removeEventListener(FOCUS_VENUE_EVENT, onFocus);
+      window.removeEventListener(FIT_VENUES_EVENT, onFit);
     };
   }, []);
   const allResults = useMemo(() => {
@@ -521,6 +530,7 @@ export function VenueHome() {
         hoveredId={hoveredId}
         onHover={setHoveredId}
         fitKey={fitKey}
+        fitIds={fitIds}
         origin={origin}
         picking={picking}
         onPick={(lat, lng) => setOriginAndSearch({ kind: "map", lat, lng, label: "your pin" })}
@@ -557,7 +567,7 @@ export function VenueHome() {
             <span className="inline-flex items-center gap-1.5 text-[#6f6d78]">
               <span className="h-3 w-3 rounded-full border-2 border-dashed border-[#b8b5c2]" /> Pending vouches
             </span>
-            <button type="button" onClick={() => setFitKey((k) => k + 1)} className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[#f0ebff] px-3 font-semibold text-[#5a3fd6] transition-colors hover:bg-[#e6defe]">
+            <button type="button" onClick={() => { setFitIds(null); setFitKey((k) => k + 1); }} className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[#f0ebff] px-3 font-semibold text-[#5a3fd6] transition-colors hover:bg-[#e6defe]">
               <Maximize2 className="h-3.5 w-3.5" /> Fit {pins.length} {pins.length === 1 ? "venue" : "venues"}
             </button>
           </motion.div>
