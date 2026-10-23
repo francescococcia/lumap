@@ -53,7 +53,7 @@ export function VenueHome() {
   const [vouched, setVouched] = useState<Record<string, boolean>>({});
   const [requested, setRequested] = useState<Record<string, boolean>>({});
 
-  const [areaSuggestions, setAreaSuggestions] = useState<{ name: string; count: number; maxCap: number | null }[]>([]);
+  const [areaSuggestions, setAreaSuggestions] = useState<{ name: string; count: number; vouched: number; maxCap: number | null }[]>([]);
 
   async function onSubmit(event?: React.FormEvent, overrideArea?: string) {
     event?.preventDefault();
@@ -114,7 +114,7 @@ export function VenueHome() {
             min_capacity: minCapacity,
             day_of_week: day || null,
             start_time: time || null,
-            max_results: 5,
+            max_results: 20,
           });
           return { area, hits: (data ?? []) as VenueHit[] };
         }),
@@ -124,10 +124,10 @@ export function VenueHome() {
         .map(({ area, hits }) => {
           const extra = local.filter((v) => v.area === area.name).length;
           const caps = hits.map((h) => h.capacity ?? 0);
-          return { name: area.name, count: hits.length + extra, maxCap: caps.length ? Math.max(...caps) : null };
+          return { name: area.name, count: hits.length + extra, vouched: hits.filter((x) => x.status !== "pending").length + extra, maxCap: caps.length ? Math.max(...caps) : null };
         })
         .filter((s) => s.count > 0)
-        .sort((a, b) => b.count - a.count || (b.maxCap ?? 0) - (a.maxCap ?? 0));
+        .sort((a, b) => b.vouched - a.vouched || b.count - a.count || (b.maxCap ?? 0) - (a.maxCap ?? 0));
       setAreaSuggestions(stats);
       const seen = new Set<string>();
       const ordered = [...perArea]
@@ -301,7 +301,7 @@ export function VenueHome() {
               <div className="flex flex-wrap gap-1.5">
                 {areaSuggestions.map((s, i) => (
                   <button key={s.name} type="button" onClick={() => { setAreaName(s.name); void onSubmit(undefined, s.name); }} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${i === 0 ? "bg-[#7854f6] !text-white" : "bg-white text-[#5a3fd6] ring-1 ring-[#e4ddfc] hover:bg-[#f0ebff]"}`}>
-                    {i === 0 ? "Best: " : ""}{s.name} · {s.count} {s.count === 1 ? "room" : "rooms"}{s.maxCap ? `, up to ${s.maxCap}` : ""}
+                    {i === 0 ? "Best: " : ""}{s.name} · {s.count} {s.count === 1 ? "room" : "rooms"}{s.vouched ? `, ${s.vouched} vouched` : ""}
                   </button>
                 ))}
               </div>
