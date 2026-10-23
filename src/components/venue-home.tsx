@@ -190,9 +190,12 @@ export function VenueHome() {
   const [fitKey, setFitKey] = useState(0);
   // Resume "vouch" / "share details" for a venue after the sign-in round trip.
   const [resumed, setResumed] = useState<{ venue: VenueHit; action: "vouch" | "report" | null } | null>(null);
+  // Keeps the resumed venue selected through the first searches on load (they normally clear the selection).
+  const keepSelected = useRef<string | null>(null);
   useEffect(() => {
     const intent = takeIntent("venue-report");
     if (!intent) return;
+    keepSelected.current = intent.venue.id;
     setResumed({ venue: { ...intent.venue, reason: null, distance_m: null } as VenueHit, action: intent.action });
     setSelectedId(intent.venue.id);
   }, []);
@@ -235,7 +238,7 @@ export function VenueHome() {
 
     setLoading(true);
     setError(null);
-    setSelectedId(null);
+    setSelectedId((id) => (id && id === keepSelected.current ? id : null));
     setCenter({ lat: area.lat, lng: area.lng });
     try {
       const supabase = getSupabase();
@@ -268,7 +271,7 @@ export function VenueHome() {
     const minCapacity = capacity.trim() === "" ? null : Number(capacity);
     setLoading(true);
     setError(null);
-    setSelectedId(null);
+    setSelectedId((id) => (id && id === keepSelected.current ? id : null));
     try {
       const supabase = getSupabase();
       const perArea = await Promise.all(
@@ -860,7 +863,10 @@ export function VenueHome() {
                 <OrganiserDetails
                   venue={{ id: selected.id, name: selected.name, address: selected.address, lat: Number(selected.lat), lng: Number(selected.lng), capacity: selected.capacity, status: selected.status }}
                   autoAction={resumed?.venue.id === selected.id ? resumed.action : null}
-                  onAutoActionDone={() => setResumed((r) => (r ? { ...r, action: null } : r))}
+                  onAutoActionDone={() => {
+                    keepSelected.current = null;
+                    setResumed((r) => (r ? { ...r, action: null } : r));
+                  }}
                 />
               ) : (
                 <p className="rounded-2xl border border-dashed border-[#e4ddfc] bg-[#faf9ff] p-3 text-xs text-[#6f6d78]">Organiser details appear once this place is on the map as a venue (add it with Add venue).</p>

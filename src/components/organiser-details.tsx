@@ -75,7 +75,8 @@ export function OrganiserDetails({ venue, autoAction, onAutoActionDone }: { venu
   const [mine, setMine] = useState<Report | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [canSee, setCanSee] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  // Which user the current rows were loaded for (null = signed out), so resuming waits for the signed-in load.
+  const [loadedFor, setLoadedFor] = useState<string | null | undefined>(undefined);
   const [formOpen, setFormOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,7 +100,7 @@ export function OrganiserDetails({ venue, autoAction, onAutoActionDone }: { venu
       setContacts([]);
       setCanSee(false);
     }
-    setLoaded(true);
+    setLoadedFor(user?.id ?? null);
   }, [venue.id, user]);
 
   useEffect(() => {
@@ -141,13 +142,14 @@ export function OrganiserDetails({ venue, autoAction, onAutoActionDone }: { venu
 
   // Resume what was started before signing in.
   useEffect(() => {
-    if (!autoAction || user === undefined || !loaded) return;
+    // The session can briefly read as signed out right after the sign-in redirect, so only resume
+    // (and consume the intent) once the signed-in user's own data has loaded.
+    if (!autoAction || !user || loadedFor !== user.id) return;
     onAutoActionDone?.();
-    if (!user) return;
     if (autoAction === "vouch") void vouch();
     else setFormOpen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoAction, user, loaded]);
+  }, [autoAction, user, loadedFor]);
 
   const org = (k: string) => rows.find((r) => r.field === k && r.source === "organiser");
   const pub = (k: string) => rows.find((r) => r.field === k && r.source === "public_source");
