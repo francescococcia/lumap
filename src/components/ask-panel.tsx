@@ -31,10 +31,41 @@ interface AskResponse {
   error?: string;
 }
 
-function inline(text: string) {
+const LINK_RE = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)|(https?:\/\/[^\s)<>\]|]+[^\s)<>\].,;:!?|])/g;
+
+function linkLabel(label: string, url: string) {
+  if (label !== url) return label;
+  try {
+    const u = new URL(url);
+    return /(^|\.)(luma\.com|lu\.ma)$/i.test(u.hostname) ? "Register on Luma" : u.hostname.replace(/^www\./, "");
+  } catch {
+    return label;
+  }
+}
+
+function bold(text: string, key: string) {
   return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
-    part.startsWith("**") && part.endsWith("**") ? <strong key={i} className="font-semibold text-[#20202a]">{part.slice(2, -2)}</strong> : part.replace(/[*_`]/g, ""),
+    part.startsWith("**") && part.endsWith("**") ? <strong key={`${key}-${i}`} className="font-semibold text-[#20202a]">{part.slice(2, -2)}</strong> : part.replace(/[*_`]/g, ""),
   );
+}
+
+// Bold plus [label](url) and bare URLs as new-tab links.
+function inline(text: string) {
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  for (const m of text.matchAll(LINK_RE)) {
+    const at = m.index ?? 0;
+    out.push(...bold(text.slice(last, at), `t${at}`));
+    const url = m[2] ?? m[3];
+    out.push(
+      <a key={`a${at}`} href={url} target="_blank" rel="noopener noreferrer" className="font-medium text-[#7854f6] underline decoration-[#cfc4fb] underline-offset-2 hover:decoration-[#7854f6]">
+        {linkLabel((m[1] ?? url).replace(/\*\*/g, ""), url)}
+      </a>,
+    );
+    last = at + m[0].length;
+  }
+  out.push(...bold(text.slice(last), "end"));
+  return out;
 }
 
 function Answer({ text }: { text: string }) {
@@ -51,6 +82,11 @@ function Answer({ text }: { text: string }) {
 }
 
 function renderLine(line: string, i: number) {
+        if (/^\|?\s*:?-{3,}/.test(line)) return null;
+        if (line.startsWith("|")) {
+          const cells = line.split("|").map((c) => c.trim()).filter(Boolean);
+          return <p key={i} className="flex gap-2 pl-1"><span className="mt-[11px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#7854f6]" /><span>{inline(cells.join(" · "))}</span></p>;
+        }
         const heading = /^#{1,6}\s+/.exec(line);
         if (heading) return <p key={i} className="pt-1 font-semibold text-[#20202a]">{inline(line.slice(heading[0].length))}</p>;
         const bullet = /^(?:[-*\u2022]|\d+[.)])\s+/.exec(line);
