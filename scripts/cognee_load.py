@@ -52,7 +52,8 @@ def fact_docs():
     """Public venue facts and recurring sessions from src/data."""
     facts = load(os.path.join(DATA, "venue-facts.json"))
     sessions = load(os.path.join(DATA, "recurring-sessions.json"))
-    addr = {v["name"]: v["address"] for v in facts["new_venues"]}
+    addr = {v["name"]: v["address"] for v in load(os.path.join(SEED, "venues-candidates.json"))["venues"]}
+    addr.update({v["name"]: v["address"] for v in facts["new_venues"]})
     docs = {}
     for f in facts["venues"]:
         name = f["match"]
