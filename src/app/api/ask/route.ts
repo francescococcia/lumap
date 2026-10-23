@@ -10,7 +10,7 @@ function coworkFallback(): string {
   for (const g of coworkWeek(coworkSessions())) {
     for (const s of g.sessions) {
       const link = sessionLink(s);
-      lines.push(`- **${s.title}**, ${g.label}, ${s.start_time}–${s.end_time}${isWeekly(s) ? "" : ` (${s.cadence})`} at ${s.venue_name}, ${s.area}. ${[s.price, s.rsvp].filter(Boolean).join(". ")}${link ? `. ${link.label}: ${link.url}` : ""}`);
+      lines.push(`- **${s.title}**, ${g.label}, ${s.start_time}–${s.end_time}${isWeekly(s) ? "" : ` (${s.cadence})`} at ${s.venue_name}, ${s.area}. ${[s.price, s.rsvp].filter(Boolean).join(". ")}${link ? `. [${link.label}](${link.url})` : ""}`);
     }
   }
   lines.push("", "Evidence:", ...coworkSessions().map((s) => sessionLink(s)?.url).filter((u): u is string => Boolean(u)));
