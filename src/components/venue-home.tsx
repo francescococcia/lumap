@@ -192,6 +192,11 @@ export function VenueHome() {
   const [resumed, setResumed] = useState<{ venue: VenueHit; action: "vouch" | "report" | null } | null>(null);
   // Keeps the resumed venue selected through the first searches on load (they normally clear the selection).
   const keepSelected = useRef<string | null>(null);
+  // An explicit pick (card, map, close) ends that.
+  const chooseVenue = (id: string | null) => {
+    keepSelected.current = null;
+    setSelectedId(id);
+  };
   useEffect(() => {
     const intent = takeIntent("venue-report");
     if (!intent) return;
@@ -394,7 +399,7 @@ export function VenueHome() {
   }, []);
   useEffect(() => {
     const onVenues = (e: Event) => setAskVenues((e as CustomEvent<VenueHit[]>).detail ?? []);
-    const onFocus = (e: Event) => setSelectedId((e as CustomEvent<string>).detail);
+    const onFocus = (e: Event) => chooseVenue((e as CustomEvent<string>).detail);
     window.addEventListener(ASK_VENUES_EVENT, onVenues);
     window.addEventListener(FOCUS_VENUE_EVENT, onFocus);
     return () => {
@@ -465,7 +470,7 @@ export function VenueHome() {
     const n = (x: string) => x.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, " ").trim();
     const hit = visibleResults.find((v) => n(v.name) === n(target) || n(v.name).startsWith(n(target)) || n(target).startsWith(n(v.name)));
     showTarget.current = null;
-    if (hit) setSelectedId(hit.id);
+    if (hit) chooseVenue(hit.id);
   }, [visibleResults, loading, searched]);
 
   // Sessions in this slot that the current area does not cover, so a
@@ -512,7 +517,7 @@ export function VenueHome() {
         pins={pins}
         center={center}
         selectedId={selectedId}
-        onSelect={setSelectedId}
+        onSelect={chooseVenue}
         hoveredId={hoveredId}
         onHover={setHoveredId}
         fitKey={fitKey}
@@ -715,11 +720,11 @@ export function VenueHome() {
               role="button"
               tabIndex={0}
               key={venue.id}
-              onClick={() => setSelectedId(venue.id)}
+              onClick={() => chooseVenue(venue.id)}
               onKeyDown={(e) => {
                 if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
                   e.preventDefault();
-                  setSelectedId(venue.id);
+                  chooseVenue(venue.id);
                 }
               }}
               onMouseEnter={() => setHoveredId(venue.id)}
@@ -784,7 +789,7 @@ export function VenueHome() {
             className={`absolute top-4 bottom-4 z-20 flex w-[min(100%-2rem,360px)] flex-col overflow-auto rounded-[24px] border border-[#ecebf0] bg-white/95 shadow-[0_20px_60px_rgba(32,32,42,0.14)] backdrop-blur-md transition-[right] duration-300 ${askOpen ? "right-[470px]" : "right-14"}`}
           >
             <div className="relative h-28 shrink-0 bg-gradient-to-br from-[#efe9ff] via-[#f6f2ff] to-[#e6f7ef]">
-              <button onClick={() => setSelectedId(null)} aria-label="Close venue panel" className="absolute top-3 right-3 rounded-full bg-white/90 p-1.5 text-[#6f6d78] shadow-sm hover:text-[#20202a]">
+              <button onClick={() => chooseVenue(null)} aria-label="Close venue panel" className="absolute top-3 right-3 rounded-full bg-white/90 p-1.5 text-[#6f6d78] shadow-sm hover:text-[#20202a]">
                 <X className="h-4 w-4" />
               </button>
               <span className={`absolute bottom-3 left-5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${selected.status === "pending" ? "bg-[#fff4e0] text-[#a86a10]" : selected.status === "suggested" ? "bg-[#f0ebff] text-[#5a3fd6]" : "bg-[#e6f7ef] text-[#1f7a52]"}`}>
@@ -863,10 +868,7 @@ export function VenueHome() {
                 <OrganiserDetails
                   venue={{ id: selected.id, name: selected.name, address: selected.address, lat: Number(selected.lat), lng: Number(selected.lng), capacity: selected.capacity, status: selected.status }}
                   autoAction={resumed?.venue.id === selected.id ? resumed.action : null}
-                  onAutoActionDone={() => {
-                    keepSelected.current = null;
-                    setResumed((r) => (r ? { ...r, action: null } : r));
-                  }}
+                  onAutoActionDone={() => setResumed((r) => (r ? { ...r, action: null } : r))}
                 />
               ) : (
                 <p className="rounded-2xl border border-dashed border-[#e4ddfc] bg-[#faf9ff] p-3 text-xs text-[#6f6d78]">Organiser details appear once this place is on the map as a venue (add it with Add venue).</p>
