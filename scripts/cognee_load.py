@@ -6,6 +6,7 @@ Env (key is read ONLY from env, never printed or written):
 Usage:
   python3 scripts/cognee_load.py            # generate docs, add, cognify, poll
   python3 scripts/cognee_load.py --docs-only
+  python3 scripts/cognee_load.py --facts-only   # upload only sessions and venue facts
 Re-running adds the docs again (Cognee dedups identical content by hash).
 """
 import json, os, sys, time, glob, datetime as dt
@@ -13,6 +14,7 @@ import urllib.request, urllib.error, uuid
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SEED = os.path.join(ROOT, "seed")
+DATA = os.path.join(ROOT, "src", "data")
 DOCS = os.path.join(ROOT, "cognee", "docs")
 DATASET = os.environ.get("COGNEE_DATASET", "lumap_london")
 BATCH = 20
@@ -30,10 +32,60 @@ def going(n):
     return f"{n} going" if n else "attendance not published"
 
 
+def load(path):
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+DAY_NAME = {"mon": "Monday", "tue": "Tuesday", "wed": "Wednesday", "thu": "Thursday",
+            "fri": "Friday", "sat": "Saturday", "sun": "Sunday"}
+USE_CASE = {"cowork": "coworking", "meetup": "a community meetup", "workshop": "a workshop", "party": "a private party"}
+GOOD_FOR = {"coworking": "coworking", "community_event": "community events", "private_party": "private parties and birthdays",
+            "workshop": "workshops"}
+
+
+def slug(text):
+    return "".join(ch if ch.isalnum() else "-" for ch in text.lower()).strip("-")[:50]
+
+
+def fact_docs():
+    """Public venue facts and recurring sessions from src/data."""
+    facts = load(os.path.join(DATA, "venue-facts.json"))
+    sessions = load(os.path.join(DATA, "recurring-sessions.json"))
+    addr = {v["name"]: v["address"] for v in facts["new_venues"]}
+    docs = {}
+    for f in facts["venues"]:
+        name = f["match"]
+        parts = [f"Venue facts: {name}" + (f", {addr[name]}" if name in addr else "") + "."]
+        parts.append(f"Type: {f['venue_type'].replace('_', ' ')}.")
+        if f.get("good_for"):
+            parts.append("Good for " + ", ".join(GOOD_FOR[g] for g in f["good_for"]) + ".")
+        if f.get("capacity"):
+            parts.append(f"Capacity up to {f['capacity']}" + (f" ({f['capacity_note']})." if f.get("capacity_note") else "."))
+        if f.get("hours"):
+            parts.append("Opening hours: " + ", ".join(f"{DAY_NAME[d]} {a}-{b}" for d, (a, b) in f["hours"].items()) + ".")
+        else:
+            parts.append("Opening hours not published.")
+        if f.get("hours_note"):
+            parts.append(f["hours_note"] + ".")
+        if f.get("sources"):
+            parts.append("Source: " + " ".join(f["sources"]))
+        if len(parts) > 3 or f.get("sources"):
+            docs[f"venuefacts-{slug(name)}.txt"] = " ".join(parts)
+    for x in sessions["sessions"]:
+        where = x["venue_name"] + (f", {addr[x['venue_name']]}" if x["venue_name"] in addr else "")
+        doc = (f"Recurring session: '{x['title']}' by {x['organiser']} at {where}. "
+               f"Good for {USE_CASE[x['use_case']]}. Every {DAY_NAME[x['day_of_week']]} {x['start_time']}-{x['end_time']} "
+               f"({x['cadence']}). Price: {x['price'] or 'not stated'}. {x['rsvp'] or ''}. {x['summary']} "
+               f"Link: {x['url']}. Checked {sessions['checked_on']}.")
+        docs[f"session-{x['key']}.txt"] = doc
+    return docs
+
+
 def build_docs():
-    venues = json.load(open(os.path.join(SEED, "venues-candidates.json")))["venues"]
-    hosted = json.load(open(os.path.join(SEED, "hosted_events.json")))
-    events = json.load(open(os.path.join(SEED, "events-all.json")))["events"]
+    venues = load(os.path.join(SEED, "venues-candidates.json"))["venues"]
+    hosted = load(os.path.join(SEED, "hosted_events.json"))
+    events = load(os.path.join(SEED, "events-all.json"))["events"]
     by_venue = {}
     for h in hosted:
         by_venue.setdefault(h["venue_key"], []).append(h)
@@ -74,6 +126,7 @@ def build_docs():
                f"city {e.get('city') or 'unknown'}, {size}{', hackathon' if e.get('is_hackathon') else ''}. "
                f"Ranked because: {', '.join(e.get('reasons') or [])}. Link: {e.get('url')}")
         docs[f"event-{i:03d}.txt"] = doc
+    docs.update(fact_docs())
     return docs
 
 
@@ -82,7 +135,8 @@ def write_docs(docs):
     for f in glob.glob(os.path.join(DOCS, "*.txt")):
         os.remove(f)
     for name, text in docs.items():
-        open(os.path.join(DOCS, name), "w").write(text + "\n")
+        with open(os.path.join(DOCS, name), "w", encoding="utf-8") as f:
+            f.write(text + "\n")
 
 
 def _env():
@@ -126,6 +180,9 @@ def main():
     if "--docs-only" in sys.argv:
         return
     items = list(docs.items())
+    if "--facts-only" in sys.argv:
+        items = [(n, t) for n, t in items if n.startswith(("session-", "venuefacts-"))]
+        print(f"uploading only the {len(items)} session and venue-fact docs")
     for i in range(0, len(items), BATCH):
         st, res = add_batch(items[i:i + BATCH])
         n = len(res.get("data_ingestion_info") or []) if isinstance(res, dict) else 0
