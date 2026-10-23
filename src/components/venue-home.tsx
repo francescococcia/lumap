@@ -19,6 +19,9 @@ import { refreshQueue } from "@/lib/submissions";
 import { NEW_TAB, directionsUrl, sessionLink, venueSite } from "@/lib/links";
 import { TYPE_LABEL, matchingSession, sessionsInSlot, sessionWhen, useCaseScore, venueSessions, venueSources, venueType, type Session, type VenueType } from "@/lib/venue-facts";
 import { DAY_LABEL, WEEK, dayWindow, hoursFit, type DayKey, type Hours, type HoursFit } from "@/lib/hours";
+import { addDays, dateLabel, isoToLocalDate, localDateToIso, londonToday, nextWeekday, quickDates, sessionOnDate, weekdayOf } from "@/lib/dates";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 
 export type VenueHit = {
   id: string;
@@ -39,6 +42,10 @@ export type VenueHit = {
   sessions?: Session[] | null;
 };
 
+type DayEvent = { id: string; title: string; url: string | null; start_at: string; end_at: string | null; organiser: string | null; lat: number | null; lng: number | null; size: number | null };
+
+const londonTime = (iso: string) => new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+
 const USE_CASE_ICON: Record<UseCaseId, React.ReactNode> = {
   meetup: <Users className="h-4 w-4" />,
   cowork: <Laptop className="h-4 w-4" />,
@@ -46,15 +53,6 @@ const USE_CASE_ICON: Record<UseCaseId, React.ReactNode> = {
   workshop: <Presentation className="h-4 w-4" />,
 };
 
-const DAYS = [
-  { value: "mon", label: "Monday" },
-  { value: "tue", label: "Tuesday" },
-  { value: "wed", label: "Wednesday" },
-  { value: "thu", label: "Thursday" },
-  { value: "fri", label: "Friday" },
-  { value: "sat", label: "Saturday" },
-  { value: "sun", label: "Sunday" },
-];
 
 const fieldClass =
   "h-11 w-full rounded-xl border border-[#e8e7ed] bg-white px-3 text-sm font-medium text-[#20202a] shadow-[0_1px_2px_rgba(32,32,42,0.04)] outline-none transition-all hover:border-[#cfc4fb] focus:border-[#b9a7fb] focus:ring-4 focus:ring-[#7854f6]/10";
@@ -67,7 +65,14 @@ export function VenueHome() {
   const searchAfterPick = useRef(false);
   const [areaName, setAreaName] = useState(LONDON_AREAS[0].name);
   const [capacity, setCapacity] = useState("80");
-  const [day, setDay] = useState("thu");
+  // A real calendar date (London); the weekday drives the opening-hours check.
+  const [date, setDateState] = useState(() => nextWeekday(londonToday(), "thu"));
+  const day = weekdayOf(date);
+  function setDate(next: string, search = true) {
+    if (next === date) return;
+    if (search) searchAfterPick.current = true;
+    setDateState(next);
+  }
   const [time, setTime] = useState("19:00");
   const [endTime, setEndTime] = useState("22:00");
   const [confirmedOnly, setConfirmedOnly] = useState(false);
@@ -76,7 +81,7 @@ export function VenueHome() {
     const next = USE_CASES.find((u) => u.id === id);
     if (!next || id === useCaseId) return;
     setUseCaseId(id);
-    setDay(next.day);
+    setDateState(nextWeekday(londonToday(), next.day as DayKey));
     setTime(next.start);
     setEndTime(next.end);
     setCapacity(next.capacity);
@@ -87,7 +92,7 @@ export function VenueHome() {
     searchAfterPick.current = false;
     void onSubmit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [useCaseId, day, time, endTime, capacity]);
+  }, [useCaseId, date, time, endTime, capacity]);
   // "Show on map" from the cowork-with-others list: set the slot, search the area, then select the venue.
   const showSearch = useRef<string | null>(null);
   const showTarget = useRef<string | null>(null);
@@ -98,7 +103,7 @@ export function VenueHome() {
     showSearch.current = s.area;
     setUseCaseId("cowork");
     setAreaName(s.area);
-    setDay(s.day_of_week);
+    setDateState(nextWeekday(londonToday(), s.day_of_week));
     setTime(s.start_time);
     setEndTime(s.end_time);
     setShowTick((t) => t + 1);
@@ -136,6 +141,20 @@ export function VenueHome() {
   const [fitKey, setFitKey] = useState(0);
   const [vouched, setVouched] = useState<Record<string, boolean>>({});
   const [requested, setRequested] = useState<Record<string, boolean>>({});
+
+  // Events-feed events on the chosen date.
+  const [dayEvents, setDayEvents] = useState<DayEvent[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    setDayEvents(null);
+    fetch(`/api/events?date=${date}`)
+      .then((r) => r.json())
+      .then((j: { events?: DayEvent[] }) => live && setDayEvents(j.events ?? []))
+      .catch(() => live && setDayEvents([]));
+    return () => {
+      live = false;
+    };
+  }, [date]);
 
   const [areaSuggestions, setAreaSuggestions] = useState<{ name: string; count: number; vouched: number; maxCap: number | null; sessions: number }[]>([]);
 
@@ -201,7 +220,7 @@ export function VenueHome() {
             max_results: 20,
           });
           const hits = ((data ?? []) as VenueHit[]).filter((v) => {
-            if (matchingSession(v, useCaseId, day as DayKey, time, endTime)) return true;
+            if (matchingSession(v, useCaseId, day, time, endTime, date)) return true;
             const f = hoursFit(v.hours, day as DayKey, time, endTime);
             return f.state === "covers" || (f.state === "unknown" && !confirmedOnly);
           });
@@ -216,7 +235,7 @@ export function VenueHome() {
           return { name: area.name, count: hits.length + extra, vouched: hits.filter((x) => x.status !== "pending").length + extra, maxCap: caps.length ? Math.max(...caps) : null };
         })
         .filter((s) => s.count > 0)
-        .map((s) => ({ ...s, sessions: perArea.find((p) => p.area.name === s.name)!.hits.filter((v) => matchingSession(v, useCaseId, day as DayKey, time, endTime)).length }))
+        .map((s) => ({ ...s, sessions: perArea.find((p) => p.area.name === s.name)!.hits.filter((v) => matchingSession(v, useCaseId, day, time, endTime, date)).length }))
         .sort((a, b) => b.sessions - a.sessions || b.vouched - a.vouched || b.count - a.count || (b.maxCap ?? 0) - (a.maxCap ?? 0));
       setAreaSuggestions(stats);
       const seen = new Set<string>();
@@ -333,11 +352,11 @@ export function VenueHome() {
   const sessionById = useMemo(() => {
     const map: Record<string, Session> = {};
     for (const v of allResults) {
-      const s = matchingSession(v, useCaseId, day as DayKey, time, endTime);
+      const s = matchingSession(v, useCaseId, day, time, endTime, date);
       if (s) map[v.id] = s;
     }
     return map;
-  }, [allResults, useCaseId, day, time, endTime]);
+  }, [allResults, useCaseId, day, time, endTime, date]);
   const hiddenByHours = allResults.filter((v) => !askIds.has(v.id) && !sessionById[v.id] && (fitById[v.id]?.state === "short" || fitById[v.id]?.state === "closed"));
   const visibleResults = useMemo(() => {
     const rank = (v: VenueHit) =>
@@ -376,13 +395,13 @@ export function VenueHome() {
   const elsewhere = useMemo(() => {
     if (!searched) return [];
     const shown = new Set(visibleResults.map((v) => v.name.toLowerCase()));
-    return sessionsInSlot(useCaseId, day as DayKey, time, endTime)
+    return sessionsInSlot(useCaseId, day, time, endTime, date)
       .filter((s) => !shown.has((s.venue_name ?? "").toLowerCase()))
       .map((s) => {
         const near = [...LONDON_AREAS].sort((a, b) => Math.hypot(a.lat - s.lat, (a.lng - s.lng) * 0.62) - Math.hypot(b.lat - s.lat, (b.lng - s.lng) * 0.62))[0];
         return { session: s, area: near };
       });
-  }, [searched, visibleResults, useCaseId, day, time, endTime]);
+  }, [searched, visibleResults, useCaseId, day, time, endTime, date]);
 
   const autoSearched = useRef(false);
   useEffect(() => {
@@ -421,7 +440,7 @@ export function VenueHome() {
             className="absolute bottom-6 left-1/2 z-10 flex -translate-x-1/2 items-center gap-3 rounded-full border border-[#ecebf0] bg-white/95 py-1.5 pr-1.5 pl-4 text-xs font-medium text-[#484751] shadow-[0_8px_24px_rgba(32,32,42,0.1)] backdrop-blur-sm max-md:hidden"
           >
             {[
-              { c: FIT_COLOR.covers, t: `Open ${DAY_LABEL[day as DayKey] ?? ""} ${time}–${endTime}` },
+              { c: FIT_COLOR.covers, t: `Open ${dateLabel(date)} ${time}–${endTime}` },
               { c: FIT_COLOR.unknown, t: "Hours not listed" },
               ...(askVenues.length ? [{ c: FIT_COLOR.ask, t: "From Ask" }] : []),
             ].map((item) => (
@@ -496,30 +515,7 @@ export function VenueHome() {
             </button>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2 grid gap-1.5 text-sm font-medium text-[#30303a]">
-              <span>Day</span>
-              <div role="radiogroup" aria-label="Day" className="grid grid-cols-7 gap-1 rounded-xl bg-[#f4f3f8] p-1">
-                {DAYS.map((item) => {
-                  const active = item.value === day;
-                  return (
-                    <button
-                      key={item.value}
-                      type="button"
-                      role="radio"
-                      aria-checked={active}
-                      aria-label={item.label}
-                      onClick={() => setDay(item.value)}
-                      className={`relative h-9 rounded-lg text-xs font-semibold transition-colors ${active ? "text-white" : "text-[#6f6d78] hover:text-[#20202a]"}`}
-                    >
-                      {active ? (
-                        <motion.span layoutId="day-pill" className="absolute inset-0 rounded-lg bg-[#7854f6] shadow-[0_4px_12px_rgba(120,84,246,0.3)]" transition={{ type: "spring", stiffness: 420, damping: 32 }} />
-                      ) : null}
-                      <span className="relative">{item.label.slice(0, 3)}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <DateField date={date} onChange={setDate} />
             <label className="grid gap-1.5 text-sm font-medium text-[#30303a]">
               Starts
               <input aria-label="Start time" className={fieldClass} type="time" value={time} onChange={(event) => setTime(event.target.value)} />
@@ -565,10 +561,11 @@ export function VenueHome() {
             </motion.div>
           ) : null}
           {useCaseId === "cowork" ? <CoworkWeek onShow={showOnMap} highlightDay={day} compact /> : null}
+          {dayEvents && dayEvents.length ? <DayEvents date={date} events={dayEvents} /> : null}
           {!loading && elsewhere.length ? (
             <div className="rounded-2xl border border-[#f3c1d4] bg-[#fff7fa] p-3">
               <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#b4235e]">
-                <Sparkles className="h-3.5 w-3.5" /> {DAY_LABEL[day as DayKey]} sessions in other areas
+                <Sparkles className="h-3.5 w-3.5" /> {dateLabel(date)}: sessions in other areas
               </p>
               <div className="grid gap-1.5">
                 {elsewhere.map(({ session, area }) => (
@@ -582,7 +579,7 @@ export function VenueHome() {
                     className="rounded-xl bg-white px-3 py-2 text-left text-xs text-[#7a1d45] ring-1 ring-[#f3c1d4] transition-colors hover:bg-[#fff0f5]"
                   >
                     <span className="block font-semibold">{session.title}</span>
-                    <span className="block text-[#9b3a62]">{session.venue_name} · {sessionWhen(session)} · show {area.name}</span>
+                    <span className="block text-[#9b3a62]">{session.venue_name} · {sessionWhen(session)}{sessionOnDate(session, date) === "check" ? " · check dates" : ""} · show {area.name}</span>
                   </button>
                 ))}
               </div>
@@ -623,7 +620,7 @@ export function VenueHome() {
                     <FitBadge fit={fitById[venue.id]} day={day as DayKey} />
                     <KindChip type={venueType(venue)} good={useCaseScore(venue, useCaseId) > 0} short={useCase.short} />
                   </div>
-                  {sessionById[venue.id] ? <HappeningHere session={sessionById[venue.id]} /> : null}
+                  {sessionById[venue.id] ? <HappeningHere session={sessionById[venue.id]} date={date} /> : null}
                   <p>{clean(venue.reason)}</p>
                   <p className="text-xs text-[#777580]">
                     {venue.capacity ? `Fits ${venue.capacity}` : "Capacity unknown"}
@@ -641,7 +638,7 @@ export function VenueHome() {
           ) : null}
           {searched && !loading && hiddenByHours.length ? (
             <p className="rounded-xl bg-[#f7f6fa] px-3 py-2 text-xs text-[#6f6d78]">
-              {hiddenByHours.length} hidden because they are not open {DAY_LABEL[day as DayKey]} {time}–{endTime}: {hiddenByHours.map((v) => `${clean(v.name).replace(/^EXAMPLE · /, "")} (${fitById[v.id]?.label})`).join(", ")}.
+              {hiddenByHours.length} hidden because they are not open {dateLabel(date)} {time}–{endTime}: {hiddenByHours.map((v) => `${clean(v.name).replace(/^EXAMPLE · /, "")} (${fitById[v.id]?.label})`).join(", ")}.
             </p>
           ) : null}
         </div>
@@ -675,7 +672,7 @@ export function VenueHome() {
                 <div className="rounded-2xl bg-[#faf9ff] p-3"><p className="text-xs text-[#8a8894]">Capacity</p><p className="mt-0.5 flex items-center gap-1.5 font-semibold"><Users className="h-4 w-4 text-[#7854f6]" />{selected.capacity ?? "?"}</p></div>
                 <div className="rounded-2xl bg-[#faf9ff] p-3"><p className="text-xs text-[#8a8894]">Distance</p><p className="mt-0.5 flex items-center gap-1.5 font-semibold"><Navigation className="h-4 w-4 text-[#7854f6]" />{selected.distance_m != null ? `${Math.round(selected.distance_m)} m` : "?"}</p></div>
               </div>
-              {sessionById[selected.id] ? <HappeningHere session={sessionById[selected.id]} large /> : null}
+              {sessionById[selected.id] ? <HappeningHere session={sessionById[selected.id]} date={date} large /> : null}
               {venueSessions(selected).filter((s) => s !== sessionById[selected.id] && s.title !== sessionById[selected.id]?.title).length ? (
                 <div className="rounded-2xl border border-[#ecebf0] p-4">
                   <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#8473c2]"><CalendarDays className="h-3.5 w-3.5" /> {sessionById[selected.id] ? "Also regular here" : "Regular here"}</p>
@@ -818,8 +815,9 @@ function VenueLinks({ venue, compact }: { venue: VenueHit; compact?: boolean }) 
   );
 }
 
-function HappeningHere({ session, large }: { session: Session; large?: boolean }) {
+function HappeningHere({ session, date, large }: { session: Session; date: string; large?: boolean }) {
   const link = sessionLink(session);
+  const check = sessionOnDate(session, date) === "check";
   return (
     <div className={`rounded-xl border border-[#f3c1d4] bg-gradient-to-r from-[#fff0f5] to-[#fff7fa] text-[#7a1d45] ${large ? "p-4" : "px-3 py-2"}`}>
       <p className={`flex items-center gap-1.5 font-semibold ${large ? "text-sm" : "text-xs"}`}>
@@ -827,8 +825,9 @@ function HappeningHere({ session, large }: { session: Session; large?: boolean }
         Happening here: {session.title}
       </p>
       <p className="mt-0.5 text-xs text-[#9b3a62]">
-        {sessionWhen(session)}
+        {dateLabel(date)} {session.start_time.slice(0, 5)}–{session.end_time.slice(0, 5)}
         {session.cadence ? `, ${session.cadence}` : ""}
+        {check ? <span className="ml-1.5 inline-flex rounded-full bg-[#fff6e6] px-1.5 py-px font-semibold text-[#9a6412]" title="This runs on some of these weekdays only. Check the organiser's page for exact dates.">check dates</span> : null}
         {session.price ? ` · ${session.price}` : ""}
       </p>
       {large ? (
@@ -851,6 +850,90 @@ function HappeningHere({ session, large }: { session: Session; large?: boolean }
           ) : null}
         </p>
       )}
+    </div>
+  );
+}
+
+function DateField({ date, onChange }: { date: string; onChange: (date: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const today = londonToday();
+  const diff = Math.round((Date.parse(date) - Date.parse(today)) / 86400000);
+  const rel = diff === 0 ? "today" : diff === 1 ? "tomorrow" : diff > 1 ? `in ${diff} days` : "";
+  return (
+    <div className="col-span-2 grid gap-1.5 text-sm font-medium text-[#30303a]">
+      <span>Date</span>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button type="button" aria-label={`Date: ${dateLabel(date)}. Pick a date`} className={`${fieldClass} flex items-center gap-2 text-left`}>
+            <CalendarDays className="h-4 w-4 text-[#7854f6]" />
+            <span>{dateLabel(date)}</span>
+            <span className="ml-auto text-xs font-normal text-[#8a8894]">{rel}</span>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent>
+          <Calendar
+            mode="single"
+            required
+            selected={isoToLocalDate(date)}
+            defaultMonth={isoToLocalDate(date)}
+            disabled={{ before: isoToLocalDate(today), after: isoToLocalDate(addDays(today, 365)) }}
+            onSelect={(d: Date | undefined) => {
+              if (!d) return;
+              onChange(localDateToIso(d));
+              setOpen(false);
+            }}
+          />
+        </PopoverContent>
+      </Popover>
+      <div className="flex flex-wrap gap-1.5" aria-label="Quick dates">
+        {quickDates(today).map((c) => {
+          const active = c.date === date;
+          return (
+            <button
+              key={c.label}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChange(c.date)}
+              className={`h-8 rounded-full px-3 text-xs font-semibold transition-colors ${active ? "bg-[#7854f6] text-white shadow-[0_4px_12px_rgba(120,84,246,0.3)]" : "bg-[#f4f3f8] text-[#5f5d68] hover:bg-[#ebe8f5]"}`}
+            >
+              {c.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function DayEvents({ date, events }: { date: string; events: DayEvent[] }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? events : events.slice(0, 3);
+  return (
+    <div className="rounded-2xl border border-[#ecebf0] bg-white p-3">
+      <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#8473c2]">
+        <CalendarDays className="h-3.5 w-3.5" /> {dateLabel(date)} in the events feed · {events.length}
+      </p>
+      <ul className="grid gap-1.5">
+        {shown.map((e) => (
+          <li key={e.id} className="text-xs leading-5 text-[#484751]">
+            <span className="mr-1.5 font-semibold text-[#5a3fd6]">{londonTime(e.start_at)}</span>
+            {e.url ? (
+              <a href={e.url} {...NEW_TAB} className="font-medium !text-[#30303a] hover:underline">{e.title}</a>
+            ) : (
+              <span className="font-medium">{e.title}</span>
+            )}
+            {e.organiser ? <span className="text-[#8a8894]"> · {e.organiser}</span> : null}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 flex items-center gap-3 text-xs font-semibold">
+        {events.length > 3 ? (
+          <button type="button" onClick={() => setAll((x) => !x)} className="text-[#7854f6] hover:underline">
+            {all ? "Show fewer" : `Show all ${events.length}`}
+          </button>
+        ) : null}
+        <a href="/events" className="!text-[#7854f6] hover:underline">Open the events feed</a>
+      </p>
     </div>
   );
 }

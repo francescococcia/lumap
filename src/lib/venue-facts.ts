@@ -7,6 +7,7 @@ import factsDoc from "@/data/venue-facts.json";
 import sessionsDoc from "@/data/recurring-sessions.json";
 import { venueKind, type UseCaseId, type VenueKind } from "@/lib/use-cases";
 import { DAY_LABEL, toMin, type DayKey } from "@/lib/hours";
+import { sessionOnDate } from "@/lib/dates";
 
 export type VenueType =
   | "cafe" | "coworking" | "library" | "community_space" | "bar" | "hotel" | "private_room"
@@ -141,13 +142,15 @@ export function venueSessions(v: VenueLike): Session[] {
 }
 
 // A session matches when it is for this use case, on this day, and overlaps the window.
-export function matchingSession(v: VenueLike, useCase: UseCaseId, day: DayKey, start: string, end: string): Session | null {
+// With a calendar date, sessions whose cadence rules that date out (e.g. "4th Tuesday") are skipped.
+export function matchingSession(v: VenueLike, useCase: UseCaseId, day: DayKey, start: string, end: string, date?: string): Session | null {
   const from = toMin(start);
   let to = toMin(end);
   if (from == null || to == null) return null;
   if (to <= from) to += 24 * 60;
   for (const s of venueSessions(v)) {
     if (s.use_case !== useCase || s.day_of_week !== day) continue;
+    if (date && sessionOnDate(s, date) === "no") continue;
     const a = toMin(s.start_time);
     const b = toMin(s.end_time);
     if (a == null || b == null) continue;
@@ -166,8 +169,8 @@ export function sessionWhen(s: Session) {
 }
 
 // Every known session for this use case and slot, wherever it is.
-export function sessionsInSlot(useCase: UseCaseId, day: DayKey, start: string, end: string) {
-  return SESSIONS.filter((s) => matchingSession({ name: s.venue_name, sessions: [s] }, useCase, day, start, end)) as (Session & { lat: number; lng: number })[];
+export function sessionsInSlot(useCase: UseCaseId, day: DayKey, start: string, end: string, date?: string) {
+  return SESSIONS.filter((s) => matchingSession({ name: s.venue_name, sessions: [s] }, useCase, day, start, end, date)) as (Session & { lat: number; lng: number })[];
 }
 
 /** Every bundled session with coordinates (for the cowork-with-others list and calendar feed). */
