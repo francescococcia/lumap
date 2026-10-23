@@ -11,6 +11,7 @@ import { LONDON_AREAS, LONDON_CENTER, SEARCH_RADIUS_M, type LondonArea } from "@
 import { getSupabase } from "@/lib/supabase";
 import { CHANGE_EVENT, listVenues } from "@/lib/pending-venues";
 import { ASK_VENUES_EVENT, FOCUS_VENUE_EVENT } from "@/components/ask-panel";
+import { DAY_LABEL, WEEK, dayWindow, hoursFit, type DayKey, type Hours, type HoursFit } from "@/lib/hours";
 
 export type VenueHit = {
   id: string;
@@ -22,6 +23,7 @@ export type VenueHit = {
   status: string | null;
   reason: string | null;
   distance_m: number | null;
+  hours?: Hours;
 };
 
 const DAYS = [
@@ -44,6 +46,8 @@ export function VenueHome() {
   const [capacity, setCapacity] = useState("80");
   const [day, setDay] = useState("thu");
   const [time, setTime] = useState("19:00");
+  const [endTime, setEndTime] = useState("22:00");
+  const [confirmedOnly, setConfirmedOnly] = useState(false);
   const [center, setCenter] = useState(LONDON_CENTER);
   const [results, setResults] = useState<VenueHit[]>([]);
   const [loading, setLoading] = useState(false);
@@ -80,7 +84,7 @@ export function VenueHome() {
         min_capacity: minCapacity,
         day_of_week: day || null,
         start_time: time || null,
-        max_results: 3,
+        max_results: 20,
       });
       if (rpcError) {
         setResults([]);
@@ -116,7 +120,11 @@ export function VenueHome() {
             start_time: time || null,
             max_results: 20,
           });
-          return { area, hits: (data ?? []) as VenueHit[] };
+          const hits = ((data ?? []) as VenueHit[]).filter((v) => {
+            const f = hoursFit(v.hours, day as DayKey, time, endTime);
+            return f.state === "covers" || (f.state === "unknown" && !confirmedOnly);
+          });
+          return { area, hits };
         }),
       );
       const local = listVenues().filter((v) => v.status === "verified" && (minCapacity == null || (v.capacity ?? 0) >= minCapacity));
@@ -197,6 +205,26 @@ export function VenueHome() {
     return [...askVenues, ...localVenues.filter(fits), ...results.filter(fits)].filter((v) => (seen.has(v.id) ? false : (seen.add(v.id), true)));
   }, [askVenues, localVenues, results, capacity]);
 
+  const fitById = useMemo(() => {
+    const map: Record<string, HoursFit> = {};
+    for (const v of allResults) map[v.id] = hoursFit(v.hours, day as DayKey, time, endTime);
+    return map;
+  }, [allResults, day, time, endTime]);
+  const askIds = useMemo(() => new Set(askVenues.map((v) => v.id)), [askVenues]);
+  const hiddenByHours = allResults.filter((v) => !askIds.has(v.id) && (fitById[v.id]?.state === "short" || fitById[v.id]?.state === "closed"));
+  const visibleResults = useMemo(() => {
+    const rank = (v: VenueHit) => (askIds.has(v.id) ? 3 : fitById[v.id]?.state === "covers" ? 2 : 1);
+    return allResults
+      .filter((v) => {
+        if (askIds.has(v.id)) return true;
+        const st = fitById[v.id]?.state;
+        return st === "covers" || (st === "unknown" && !confirmedOnly);
+      })
+      .map((v, i) => ({ v, i }))
+      .sort((a, b) => rank(b.v) - rank(a.v) || a.i - b.i)
+      .map(({ v }) => v);
+  }, [allResults, fitById, askIds, confirmedOnly]);
+
   const autoSearched = useRef(false);
   useEffect(() => {
     if (autoSearched.current) return;
@@ -208,13 +236,13 @@ export function VenueHome() {
 
   const pins: MapPin[] = useMemo(
     () =>
-      allResults.flatMap((venue) => {
+      visibleResults.flatMap((venue) => {
         const lat = Number(venue.lat);
         const lng = Number(venue.lng);
         if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
         return [{ id: venue.id, name: venue.name, lat, lng, status: venue.status }];
       }),
-    [allResults],
+    [visibleResults],
   );
   const selected = allResults.find((venue) => venue.id === selectedId) ?? null;
   const clean = (text: string | null) => (text ?? "").replace(/\u00c2/g, "");
@@ -271,9 +299,17 @@ export function VenueHome() {
                 })}
               </div>
             </div>
-            <label className="col-span-2 grid gap-1.5 text-sm font-medium text-[#30303a]">
-              Time
-              <input className={fieldClass} type="time" value={time} onChange={(event) => setTime(event.target.value)} />
+            <label className="grid gap-1.5 text-sm font-medium text-[#30303a]">
+              Starts
+              <input aria-label="Start time" className={fieldClass} type="time" value={time} onChange={(event) => setTime(event.target.value)} />
+            </label>
+            <label className="grid gap-1.5 text-sm font-medium text-[#30303a]">
+              Ends
+              <input aria-label="End time" className={fieldClass} type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
+            </label>
+            <label className="col-span-2 flex cursor-pointer items-center gap-2 text-xs font-medium text-[#6f6d78]">
+              <input type="checkbox" className="h-4 w-4 accent-[#7854f6]" checked={confirmedOnly} onChange={(e) => setConfirmedOnly(e.target.checked)} />
+              Only venues with confirmed opening hours
             </label>
           </div>
           <Button className="h-11 rounded-xl bg-[#7854f6] shadow-[0_8px_20px_rgba(120,84,246,0.25)] transition-transform active:scale-[0.98] text-white hover:bg-[#6842eb]" disabled={loading} type="submit">
@@ -307,7 +343,7 @@ export function VenueHome() {
               </div>
             </motion.div>
           ) : null}
-          {allResults.map((venue, index) => (
+          {visibleResults.map((venue, index) => (
             <motion.button
               type="button"
               key={venue.id}
@@ -328,7 +364,8 @@ export function VenueHome() {
                   </CardTitle>
                   <CardDescription>{clean(venue.address) || "London"}</CardDescription>
                 </CardHeader>
-                <CardContent className="grid gap-1 text-[#484751]">
+                <CardContent className="grid gap-1.5 text-[#484751]">
+                  <FitBadge fit={fitById[venue.id]} day={day as DayKey} />
                   <p>{clean(venue.reason)}</p>
                   <p className="text-xs text-[#777580]">
                     {venue.capacity ? `Fits ${venue.capacity}` : "Capacity unknown"}
@@ -340,8 +377,13 @@ export function VenueHome() {
             </motion.button>
           ))}
           </AnimatePresence>
-          {searched && !error && results.length === 0 ? (
+          {searched && !error && !loading && visibleResults.length === 0 ? (
             <p className="text-sm text-[#777580]">No venues in that search.</p>
+          ) : null}
+          {searched && !loading && hiddenByHours.length ? (
+            <p className="rounded-xl bg-[#f7f6fa] px-3 py-2 text-xs text-[#6f6d78]">
+              {hiddenByHours.length} hidden because they are not open {DAY_LABEL[day as DayKey]} {time}–{endTime}: {hiddenByHours.map((v) => `${clean(v.name).replace(/^EXAMPLE · /, "")} (${fitById[v.id]?.label})`).join(", ")}.
+            </p>
           ) : null}
         </div>
       </section>
@@ -372,6 +414,25 @@ export function VenueHome() {
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-2xl bg-[#faf9ff] p-3"><p className="text-xs text-[#8a8894]">Capacity</p><p className="mt-0.5 flex items-center gap-1.5 font-semibold"><Users className="h-4 w-4 text-[#7854f6]" />{selected.capacity ?? "?"}</p></div>
                 <div className="rounded-2xl bg-[#faf9ff] p-3"><p className="text-xs text-[#8a8894]">Distance</p><p className="mt-0.5 flex items-center gap-1.5 font-semibold"><Navigation className="h-4 w-4 text-[#7854f6]" />{selected.distance_m != null ? `${Math.round(selected.distance_m)} m` : "?"}</p></div>
+              </div>
+              <div className="rounded-2xl border border-[#ecebf0] p-4">
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#8473c2]"><Clock className="h-3.5 w-3.5" /> Opening hours</p>
+                <FitBadge fit={fitById[selected.id]} day={day as DayKey} />
+                {dayWindow(selected.hours, "mon") !== undefined ? (
+                  <ul className="mt-3 grid grid-cols-7 gap-1 text-center text-[11px]">
+                    {WEEK.map((d) => {
+                      const w = dayWindow(selected.hours, d);
+                      return (
+                        <li key={d} className={`rounded-lg px-0.5 py-1.5 ${d === day ? "bg-[#f0ebff] font-semibold text-[#5a3fd6] ring-1 ring-[#d9cffd]" : "bg-[#faf9ff] text-[#6f6d78]"}`}>
+                          <span className="block">{DAY_LABEL[d]}</span>
+                          <span className="block leading-4">{w ? <>{w.start}<br />{w.end}</> : "shut"}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-xs text-[#777580]">No hours listed yet. Check with the host before you book.</p>
+                )}
               </div>
               <div className="rounded-2xl border border-[#ecebf0] p-4">
                 <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#8473c2]">Why it matches</p>
@@ -415,5 +476,22 @@ export function VenueHome() {
         ) : null}
       </AnimatePresence>
     </div>
+  );
+}
+
+function FitBadge({ fit, day }: { fit?: HoursFit; day: DayKey }) {
+  if (!fit) return null;
+  const tone =
+    fit.state === "covers"
+      ? "bg-[#e6f7ef] text-[#1f7a52]"
+      : fit.state === "unknown"
+        ? "bg-[#fff6e6] text-[#9a6412]"
+        : "bg-[#fdeeee] text-[#a33a3a]";
+  return (
+    <span className={`inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${tone}`}>
+      <Clock className="h-3 w-3" />
+      {fit.state === "covers" && fit.open ? `${DAY_LABEL[day]}: ` : ""}
+      {fit.label}
+    </span>
   );
 }
