@@ -42,8 +42,9 @@ function priceText(v: unknown) {
   if (!p?.kind) return "";
   if (p.kind === "free") return "Free";
   if (p.kind === "sponsored") return "Free if sponsored / hosted by a member";
-  const range = p.min != null && p.max != null && p.max !== p.min ? `£${p.min}–£${p.max}` : p.min != null ? `£${p.min}` : p.max != null ? `up to £${p.max}` : "";
-  return p.kind === "minimum_spend" ? `Minimum spend${range ? ` ${range}` : ""}` : `${range || "Paid"} per evening`;
+  const range = p.min != null && p.max != null && p.max !== p.min ? `£${p.min}–£${p.max}` : p.min != null ? `From £${p.min}` : p.max != null ? `up to £${p.max}` : "";
+  if (p.kind === "minimum_spend") return `Minimum spend${range ? ` ${range.replace("From", "from")}` : ""}`;
+  return range || "Paid";
 }
 
 type FieldDef = { key: string; label: string; show: (v: unknown, all: Record<string, unknown>) => string; extra?: string[] };
@@ -64,7 +65,7 @@ const EXTRA_TEXT: Record<string, (v: unknown) => string> = {
   capacity_seated: (v) => `${v} seated`,
 };
 // A field counts as known if its main value or (for capacity) the seated figure is known.
-const ALIASES: Record<string, string[]> = { capacity_standing: ["capacity_seated"], accessible_toilet: ["toilets_count"] };
+const ALIASES: Record<string, string[]> = { price: ["price_note"], capacity_standing: ["capacity_seated"], accessible_toilet: ["toilets_count"] };
 
 const shortDate = (iso: string) => new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric" }).format(new Date(iso));
 
