@@ -2,9 +2,10 @@
 """Write supabase/seed.sql from config/city.json and the Luma snapshot.
 
 The snapshot capacity field is max_guest_count_lower_bound. It is stored as
-guest_count_lower_bound and the venue capacity is left null. Four EXAMPLE
-verified venues near Old Street are appended so search works before anyone
-enters a real venue. Contacts on those rows are @demo.lumap.invalid placeholders.
+guest_count_lower_bound and the venue capacity is left null. The old EXAMPLE
+venues are gone; this file still deletes rows with source 'example' so a
+re-run cleans them up. Real venues from public sources are loaded by
+scripts/apply_public_data.mjs.
 """
 
 from __future__ import annotations
@@ -25,106 +26,6 @@ WEEKNIGHTS = ("mon", "tue", "wed", "thu", "fri")
 THU_FRI = ("thu", "fri")
 WEEKEND = ("sat", "sun")
 
-EXAMPLES = [
-    {
-        "seed_key": "example-old-street-community-room",
-        "name": "EXAMPLE · Old Street Community Room",
-        "address": "EXAMPLE only, near Old Street roundabout, London",
-        "lat": 51.5263,
-        "lng": -0.0889,
-        "capacity": 100,
-        "has_av": True,
-        "av_notes": "projector",
-        "days": WEEKNIGHTS,
-        "start": "18:00",
-        "end": "22:00",
-        "evening_hours": "Mon–Fri 18:00–22:00",
-        "weekend_hours": None,
-        "terms": "community rate, confirm availability",
-        "contact": "example-old-street-room@demo.lumap.invalid",
-        "notes": "EXAMPLE venue for the demo. Not a real place. Do not email this address.",
-    },
-    {
-        "seed_key": "example-hoxton-works-hall",
-        "name": "EXAMPLE · Hoxton Works Hall",
-        "address": "EXAMPLE only, Hoxton Square side of Old Street, London",
-        "lat": 51.5282,
-        "lng": -0.0816,
-        "capacity": 80,
-        "has_av": True,
-        "av_notes": "projector and a mic",
-        "days": THU_FRI,
-        "start": "18:00",
-        "end": "22:00",
-        "evening_hours": "Thu–Fri 18:00–22:00",
-        "weekend_hours": None,
-        "terms": "paid hire, confirm availability",
-        "contact": "example-hoxton-works@demo.lumap.invalid",
-        "notes": "EXAMPLE venue for the demo. Not a real place. Do not email this address.",
-    },
-    {
-        "seed_key": "example-scrutton-street-loft",
-        "name": "EXAMPLE · Scrutton Street Loft",
-        "address": "EXAMPLE only, Scrutton Street, London",
-        "lat": 51.5236,
-        "lng": -0.0842,
-        "capacity": None,
-        "has_av": None,
-        "av_notes": None,
-        "days": THU_FRI,
-        "start": "18:00",
-        "end": "22:00",
-        "evening_hours": "Thu–Fri 18:00–22:00",
-        "weekend_hours": None,
-        "terms": None,
-        "contact": "example-scrutton-loft@demo.lumap.invalid",
-        "notes": "EXAMPLE venue for the demo. Capacity is unknown on purpose. Not a real place.",
-    },
-    {
-        "seed_key": "example-whitecross-weekend-room",
-        "name": "EXAMPLE · Whitecross Weekend Room",
-        "address": "EXAMPLE only, Whitecross Street, London",
-        "lat": 51.5240,
-        "lng": -0.0938,
-        "capacity": 160,
-        "has_av": True,
-        "av_notes": "projector",
-        "days": WEEKEND,
-        "start": "10:00",
-        "end": "18:00",
-        "evening_hours": None,
-        "weekend_hours": "Sat–Sun 10:00–18:00",
-        "terms": "community rate, confirm availability",
-        "contact": "example-whitecross@demo.lumap.invalid",
-        "notes": "EXAMPLE venue for the demo. Open at the weekend, not on Thursday evening. Not a real place.",
-    },
-]
-
-EXAMPLE_EVENTS = [
-    {
-        "external_id": "example-evt-old-street-1",
-        "seed_key": "example-old-street-community-room",
-        "event_name": "EXAMPLE community night",
-        "event_date": "2026-09-17T18:30:00+00:00",
-        "guest_count": 90,
-    },
-    {
-        "external_id": "example-evt-old-street-2",
-        "seed_key": "example-old-street-community-room",
-        "event_name": "EXAMPLE Thursday meetup",
-        "event_date": "2026-10-01T18:30:00+00:00",
-        "guest_count": 60,
-    },
-    {
-        "external_id": "example-evt-hoxton-1",
-        "seed_key": "example-hoxton-works-hall",
-        "event_name": "EXAMPLE paid-hire rehearsal",
-        "event_date": "2026-09-24T18:30:00+00:00",
-        "guest_count": 40,
-    },
-]
-
-
 def sql_text(value: str | None) -> str:
     if value is None:
         return "null"
@@ -140,20 +41,9 @@ def sql_int(value: int | None) -> str:
     return str(int(value))
 
 
-def sql_bool(value: bool | None) -> str:
-    if value is None:
-        return "null"
-    return "true" if value else "false"
-
-
 def sql_uuid(value: str) -> str:
     uuid.UUID(value)
     return f"'{value}'::uuid"
-
-
-def hours_json(days: tuple[str, ...], start: str, end: str) -> str:
-    payload = {day: {"start": start, "end": end} for day in days}
-    return sql_text(json.dumps(payload, separators=(",", ":"))) + "::jsonb"
 
 
 def main() -> None:
@@ -170,7 +60,7 @@ def main() -> None:
         "-- Reload after changing config/city.json or the files in seed/.",
         "-- Candidate venues stay status pending with capacity null.",
         "-- max_guest_count_lower_bound is stored as guest_count_lower_bound.",
-        "-- EXAMPLE venues are fictional and sit near Old Street for the demo.",
+        "-- Rows with source example are deleted, they were fictional.",
         "-- No real contact details.",
         "",
         "begin;",
@@ -198,6 +88,7 @@ def main() -> None:
         "",
         "delete from public.hosted_events where source in ('luma', 'example');",
         "delete from public.venues where source in ('luma', 'example');",
+        "delete from public.communities where name = 'EXAMPLE Community';",
         "",
     ]
 
@@ -219,14 +110,6 @@ def main() -> None:
             }
         elif name != "Personal" and row["luma_calendar_id"] not in (None, cal):
             raise SystemExit(f"community {name} has two calendar ids")
-
-    example_community_id = str(uuid.uuid5(NS, "community:EXAMPLE Community"))
-    communities["EXAMPLE Community"] = {
-        "id": example_community_id,
-        "name": "EXAMPLE Community",
-        "luma_calendar_id": None,
-        "notes": "Fictional community used only by the EXAMPLE venues.",
-    }
 
     lines.append("-- Communities named in the snapshot. Personal is one row, with no host.")
     for name in sorted(communities):
@@ -262,31 +145,6 @@ def main() -> None:
             "status = 'pending', source = 'luma', capacity = null;"
         )
 
-    lines += ["", "-- EXAMPLE verified venues near Old Street. Fictional."]
-    for venue in EXAMPLES:
-        venue_id = str(uuid.uuid5(NS, "venue:" + venue["seed_key"]))
-        venue_ids[venue["seed_key"]] = venue_id
-        lines.append(
-            "insert into public.venues ("
-            "id, name, address, lat, lng, capacity, has_av, av_notes, hours, "
-            "evening_hours, weekend_hours, terms, contact, notes, status, created_by, source, seed_key"
-            ") values ("
-            f"{sql_uuid(venue_id)}, {sql_text(venue['name'])}, {sql_text(venue['address'])}, "
-            f"{venue['lat']}, {venue['lng']}, {sql_int(venue['capacity'])}, "
-            f"{sql_bool(venue['has_av'])}, {sql_text(venue['av_notes'])}, "
-            f"{hours_json(venue['days'], venue['start'], venue['end'])}, "
-            f"{sql_text(venue['evening_hours'])}, {sql_text(venue['weekend_hours'])}, "
-            f"{sql_text(venue['terms'])}, {sql_text(venue['contact'])}, {sql_text(venue['notes'])}, "
-            f"'verified', {sql_uuid(root_id)}, 'example', {sql_text(venue['seed_key'])}"
-            ") on conflict (seed_key) do update set "
-            "name = excluded.name, address = excluded.address, lat = excluded.lat, "
-            "lng = excluded.lng, capacity = excluded.capacity, has_av = excluded.has_av, "
-            "av_notes = excluded.av_notes, hours = excluded.hours, "
-            "evening_hours = excluded.evening_hours, weekend_hours = excluded.weekend_hours, "
-            "terms = excluded.terms, contact = excluded.contact, notes = excluded.notes, "
-            "status = 'verified', source = 'example';"
-        )
-
     lines += ["", "-- Who hosted where. guest_count 0 is kept and means the count was not shown."]
     for event in events:
         venue_id = venue_ids.get(event["venue_key"])
@@ -308,23 +166,6 @@ def main() -> None:
             "community_name = excluded.community_name, event_name = excluded.event_name, "
             "event_date = excluded.event_date, guest_count = excluded.guest_count, "
             "url = excluded.url, source = 'luma';"
-        )
-
-    for event in EXAMPLE_EVENTS:
-        lines.append(
-            "insert into public.hosted_events ("
-            "id, venue_id, community_id, community_name, event_name, event_date, "
-            "guest_count, source, external_id"
-            ") values ("
-            f"{sql_uuid(str(uuid.uuid5(NS, 'event:' + event['external_id'])))}, "
-            f"{sql_uuid(venue_ids[event['seed_key']])}, {sql_uuid(example_community_id)}, "
-            f"{sql_text('EXAMPLE Community')}, {sql_text(event['event_name'])}, "
-            f"{sql_text(event['event_date'])}::timestamptz, {sql_int(event['guest_count'])}, "
-            f"'example', {sql_text(event['external_id'])}"
-            ") on conflict (external_id) do update set "
-            "venue_id = excluded.venue_id, community_id = excluded.community_id, "
-            "event_name = excluded.event_name, event_date = excluded.event_date, "
-            "guest_count = excluded.guest_count, source = 'example';"
         )
 
     lines += [
