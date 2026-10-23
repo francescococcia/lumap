@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { AlertCircle, CalendarDays, CheckCircle2, Lock, Mail, Clock, MapPin as MapPinIcon, Navigation, Search, ShieldCheck, Users, X } from "lucide-react";
+import { Laptop, PartyPopper, Presentation, AlertCircle, CalendarDays, CheckCircle2, Lock, Mail, Clock, MapPin as MapPinIcon, Navigation, Search, ShieldCheck, Users, X } from "lucide-react";
 import { FancySelect, Stepper } from "@/components/ui/fancy-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import { LONDON_AREAS, LONDON_CENTER, SEARCH_RADIUS_M, type LondonArea } from "@
 import { getSupabase } from "@/lib/supabase";
 import { CHANGE_EVENT, listVenues } from "@/lib/pending-venues";
 import { ASK_VENUES_EVENT, FOCUS_VENUE_EVENT } from "@/components/ask-panel";
+import { KIND_LABEL, USE_CASES, kindScore, venueKind, type UseCaseId } from "@/lib/use-cases";
 import { DAY_LABEL, WEEK, dayWindow, hoursFit, type DayKey, type Hours, type HoursFit } from "@/lib/hours";
 
 export type VenueHit = {
@@ -24,6 +25,15 @@ export type VenueHit = {
   reason: string | null;
   distance_m: number | null;
   hours?: Hours;
+  notes?: string | null;
+  terms?: string | null;
+};
+
+const USE_CASE_ICON: Record<UseCaseId, React.ReactNode> = {
+  meetup: <Users className="h-4 w-4" />,
+  cowork: <Laptop className="h-4 w-4" />,
+  party: <PartyPopper className="h-4 w-4" />,
+  workshop: <Presentation className="h-4 w-4" />,
 };
 
 const DAYS = [
@@ -42,12 +52,32 @@ const fieldClass =
 const ANY_AREA = "__any__";
 
 export function VenueHome() {
+  const [useCaseId, setUseCaseId] = useState<UseCaseId>("meetup");
+  const useCase = USE_CASES.find((u) => u.id === useCaseId) ?? USE_CASES[0];
+  const searchAfterPick = useRef(false);
   const [areaName, setAreaName] = useState(LONDON_AREAS[0].name);
   const [capacity, setCapacity] = useState("80");
   const [day, setDay] = useState("thu");
   const [time, setTime] = useState("19:00");
   const [endTime, setEndTime] = useState("22:00");
   const [confirmedOnly, setConfirmedOnly] = useState(false);
+
+  function pickUseCase(id: UseCaseId) {
+    const next = USE_CASES.find((u) => u.id === id);
+    if (!next || id === useCaseId) return;
+    setUseCaseId(id);
+    setDay(next.day);
+    setTime(next.start);
+    setEndTime(next.end);
+    setCapacity(next.capacity);
+    searchAfterPick.current = true;
+  }
+  useEffect(() => {
+    if (!searchAfterPick.current) return;
+    searchAfterPick.current = false;
+    void onSubmit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useCaseId, day, time, endTime, capacity]);
   const [center, setCenter] = useState(LONDON_CENTER);
   const [results, setResults] = useState<VenueHit[]>([]);
   const [loading, setLoading] = useState(false);
@@ -213,7 +243,11 @@ export function VenueHome() {
   const askIds = useMemo(() => new Set(askVenues.map((v) => v.id)), [askVenues]);
   const hiddenByHours = allResults.filter((v) => !askIds.has(v.id) && (fitById[v.id]?.state === "short" || fitById[v.id]?.state === "closed"));
   const visibleResults = useMemo(() => {
-    const rank = (v: VenueHit) => (askIds.has(v.id) ? 3 : fitById[v.id]?.state === "covers" ? 2 : 1);
+    const rank = (v: VenueHit) =>
+      (askIds.has(v.id) ? 1000 : fitById[v.id]?.state === "covers" ? 200 : 100) +
+      kindScore(venueKind(v), useCase) * 20 +
+      (v.status === "verified" ? 5 : 0) +
+      (v.capacity != null ? 2 : 0);
     return allResults
       .filter((v) => {
         if (askIds.has(v.id)) return true;
@@ -223,7 +257,7 @@ export function VenueHome() {
       .map((v, i) => ({ v, i }))
       .sort((a, b) => rank(b.v) - rank(a.v) || a.i - b.i)
       .map(({ v }) => v);
-  }, [allResults, fitById, askIds, confirmedOnly]);
+  }, [allResults, fitById, askIds, confirmedOnly, useCase]);
 
   const autoSearched = useRef(false);
   useEffect(() => {
@@ -263,6 +297,33 @@ export function VenueHome() {
           </nav>
         </div>
         <form className="grid gap-3" onSubmit={onSubmit}>
+          <div className="grid gap-1.5 text-sm font-medium text-[#30303a]">
+            <span>What&apos;s it for?</span>
+            <div role="radiogroup" aria-label="What's it for" className="grid grid-cols-2 gap-1.5">
+              {USE_CASES.map((u) => {
+                const active = u.id === useCaseId;
+                return (
+                  <button
+                    key={u.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => pickUseCase(u.id)}
+                    className={`relative flex h-10 items-center gap-2 rounded-xl px-3 text-left text-xs font-semibold ring-1 transition-colors ${active ? "text-[#4b2fd0] ring-[#cfc4fb]" : "bg-white text-[#5f5d68] ring-[#ecebf0] hover:bg-[#faf9ff]"}`}
+                  >
+                    {active ? <motion.span layoutId="usecase-pill" className="absolute inset-0 rounded-xl bg-[#f0ebff]" transition={{ type: "spring", stiffness: 420, damping: 32 }} /> : null}
+                    <span className="relative">{USE_CASE_ICON[u.id]}</span>
+                    <span className="relative">{u.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <AnimatePresence mode="wait">
+              <motion.p key={useCase.id} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="text-xs font-normal text-[#777580]">
+                {useCase.tip}
+              </motion.p>
+            </AnimatePresence>
+          </div>
           <div className="grid gap-1.5 text-sm font-medium text-[#30303a]">
             <span>Area</span>
             <FancySelect label="Area" icon={<MapPinIcon className="h-4 w-4" />} value={areaName} onChange={setAreaName} options={[{ value: ANY_AREA, label: "Anywhere, suggest an area" }, ...LONDON_AREAS.map((area) => ({ value: area.name, label: area.name }))]} />
@@ -365,7 +426,10 @@ export function VenueHome() {
                   <CardDescription>{clean(venue.address) || "London"}</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-1.5 text-[#484751]">
-                  <FitBadge fit={fitById[venue.id]} day={day as DayKey} />
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <FitBadge fit={fitById[venue.id]} day={day as DayKey} />
+                    <KindChip kind={venueKind(venue)} good={kindScore(venueKind(venue), useCase) > 0} short={useCase.short} />
+                  </div>
                   <p>{clean(venue.reason)}</p>
                   <p className="text-xs text-[#777580]">
                     {venue.capacity ? `Fits ${venue.capacity}` : "Capacity unknown"}
@@ -378,7 +442,7 @@ export function VenueHome() {
           ))}
           </AnimatePresence>
           {searched && !error && !loading && visibleResults.length === 0 ? (
-            <p className="text-sm text-[#777580]">No venues in that search.</p>
+            <p className="rounded-xl border border-dashed border-[#e4ddfc] bg-[#faf9ff] px-3 py-2.5 text-sm text-[#6f6d78]">{useCase.empty}</p>
           ) : null}
           {searched && !loading && hiddenByHours.length ? (
             <p className="rounded-xl bg-[#f7f6fa] px-3 py-2 text-xs text-[#6f6d78]">
@@ -492,6 +556,14 @@ function FitBadge({ fit, day }: { fit?: HoursFit; day: DayKey }) {
       <Clock className="h-3 w-3" />
       {fit.state === "covers" && fit.open ? `${DAY_LABEL[day]}: ` : ""}
       {fit.label}
+    </span>
+  );
+}
+
+function KindChip({ kind, good, short }: { kind: ReturnType<typeof venueKind>; good: boolean; short: string }) {
+  return (
+    <span className={`inline-flex w-fit items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${good ? "bg-[#f0ebff] text-[#5a3fd6]" : "bg-[#f4f3f8] text-[#6f6d78]"}`}>
+      {KIND_LABEL[kind]}{good ? ` · good for ${short.toLowerCase()}` : ""}
     </span>
   );
 }
