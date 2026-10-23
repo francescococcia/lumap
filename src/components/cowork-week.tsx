@@ -99,7 +99,7 @@ export function CoworkWeek({ onShow, highlightDay, compact }: { onShow?: (s: Cow
                           <MapPin className="h-3 w-3" /> Show on map
                         </button>
                       ) : (
-                        <a href={`/?session=${encodeURIComponent(s.key)}`} className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#e2dcf7] bg-white px-2.5 text-xs font-medium text-[#5a3fd6] hover:bg-[#faf9ff]">
+                        <a href={`/?session=${encodeURIComponent(s.key)}`} className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#e2dcf7] bg-white px-2.5 text-xs font-medium !text-[#5a3fd6] hover:bg-[#faf9ff]">
                           <MapPin className="h-3 w-3" /> Show on map
                         </a>
                       )}
@@ -113,10 +113,10 @@ export function CoworkWeek({ onShow, highlightDay, compact }: { onShow?: (s: Cow
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#e7e0fb] pt-3">
         <HostCoworkDialog />
-        <a href={google} {...NEW_TAB} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#e2dcf7] bg-white px-3 text-xs font-medium text-[#30303a] hover:bg-[#faf9ff]">
+        <a href={google} {...NEW_TAB} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#e2dcf7] bg-white px-3 text-xs font-medium !text-[#30303a] hover:bg-[#faf9ff]">
           <CalendarPlus className="h-3.5 w-3.5 text-[#7854f6]" /> Subscribe to coworking
         </a>
-        <a href={webcal} className="text-xs font-medium text-[#7854f6] hover:underline">Apple / Outlook</a>
+        <a href={webcal} className="text-xs font-medium !text-[#7854f6] hover:underline">Apple / Outlook</a>
       </div>
     </section>
   );

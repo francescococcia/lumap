@@ -65,7 +65,7 @@ export function HostCoworkDialog() {
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <a href="/review" className="inline-flex h-11 items-center justify-center rounded-xl border border-[#e2dcf7] text-sm font-medium text-[#5a3fd6] hover:bg-[#faf9ff]">Open review queue</a>
+                    <a href="/review" className="inline-flex h-11 items-center justify-center rounded-xl border border-[#e2dcf7] text-sm font-medium !text-[#5a3fd6] hover:bg-[#faf9ff]">Open review queue</a>
                     <button type="button" onClick={close} className="h-11 rounded-xl bg-[#7854f6] text-sm font-medium !text-white hover:bg-[#6842eb]">Done</button>
                   </div>
                 </div>

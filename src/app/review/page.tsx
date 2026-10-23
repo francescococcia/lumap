@@ -102,7 +102,7 @@ export default function ReviewPage() {
                     <h3 className="font-semibold">{s.title}</h3>
                     <p className="mt-0.5 text-sm text-[#6f6d78]">Every {DAY_LABEL[s.day_of_week]} {s.start_time}–{s.end_time} · {[s.venue_name, s.address, s.area].filter(Boolean).join(", ")}</p>
                     <p className="mt-0.5 text-xs text-[#85838f]">{[s.organiser, s.price].filter(Boolean).join(" · ")}</p>
-                    {s.url ? <a href={s.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs font-medium text-[#7854f6] hover:underline">{s.url}</a> : null}
+                    {s.url ? <a href={s.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs font-medium !text-[#7854f6] hover:underline">{s.url}</a> : null}
                     {s.note ? <p className="mt-2 text-sm leading-6 text-[#484751]">{s.note}</p> : null}
                   </div>
                   <span className="shrink-0 rounded-full bg-[#fff4e0] px-2.5 py-1 text-xs font-semibold text-[#a86a10]">{s.vouches} of {VOUCHES_NEEDED} vouches</span>

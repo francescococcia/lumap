@@ -59,7 +59,7 @@ function inline(raw: string) {
     out.push(...bold(text.slice(last, at), `t${at}`));
     const url = m[2] ?? m[3];
     out.push(
-      <a key={`a${at}`} href={url} target="_blank" rel="noopener noreferrer" className="font-medium text-[#7854f6] underline decoration-[#cfc4fb] underline-offset-2 hover:decoration-[#7854f6]">
+      <a key={`a${at}`} href={url} target="_blank" rel="noopener noreferrer" className="font-medium !text-[#7854f6] !underline decoration-[#cfc4fb] underline-offset-2 hover:decoration-[#7854f6]">
         {linkLabel((m[1] ?? url).replace(/\*\*/g, ""), url)}
       </a>,
     );

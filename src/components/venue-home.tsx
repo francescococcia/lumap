@@ -405,10 +405,10 @@ export function VenueHome() {
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-lg font-semibold tracking-tight">Find a room</h1>
           <nav className="flex gap-3 text-sm font-medium" aria-label="More">
-            <a className="text-[#7854f6] hover:underline" href="/events">
+            <a className="!text-[#7854f6] hover:underline" href="/events">
               Events feed
             </a>
-            <a className="text-[#7854f6] hover:underline" href="/ask">
+            <a className="!text-[#7854f6] hover:underline" href="/ask">
               Ask
             </a>
           </nav>
@@ -644,7 +644,7 @@ export function VenueHome() {
                           <span className="font-medium text-[#30303a]">{s.title}</span>
                           <span className="block text-xs text-[#777580]">{sessionWhen(s)}{s.cadence ? `, ${s.cadence}` : ""}{s.price ? ` · ${s.price}` : ""}</span>
                           {sessionLink(s) ? (
-                            <a href={sessionLink(s)!.url} {...NEW_TAB} className="inline-flex items-center gap-1 text-xs font-semibold text-[#7854f6] hover:underline">
+                            <a href={sessionLink(s)!.url} {...NEW_TAB} className="inline-flex items-center gap-1 text-xs font-semibold !text-[#7854f6] hover:underline">
                               {sessionLink(s)!.label} <ExternalLink className="h-3 w-3" />
                             </a>
                           ) : null}
@@ -681,7 +681,7 @@ export function VenueHome() {
                   <p className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-xs text-[#8a8894]">
                     Public sources:
                     {venueSources(selected).map((u) => (
-                      <a key={u} href={u} target="_blank" rel="noopener noreferrer" className="text-[#7854f6] hover:underline">{new URL(u).hostname.replace(/^www\./, "")}</a>
+                      <a key={u} href={u} target="_blank" rel="noopener noreferrer" className="!text-[#7854f6] hover:underline">{new URL(u).hostname.replace(/^www\./, "")}</a>
                     ))}
                   </p>
                 ) : null}
@@ -750,11 +750,11 @@ function VenueLinks({ venue, compact }: { venue: VenueHit; compact?: boolean }) 
   if (compact) {
     return (
       <p className="flex flex-wrap items-center gap-1.5 pt-1">
-        <a href={directionsUrl(venue)} {...NEW_TAB} onClick={stop} className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#e8e7ed] bg-white px-2.5 text-xs font-medium text-[#30303a] hover:border-[#cfc4fb] hover:text-[#5a3fd6]">
+        <a href={directionsUrl(venue)} {...NEW_TAB} onClick={stop} className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#e8e7ed] bg-white px-2.5 text-xs font-medium !text-[#30303a] hover:border-[#cfc4fb] hover:text-[#5a3fd6]">
           <Navigation className="h-3 w-3" /> Directions
         </a>
         {site ? (
-          <a href={site.url} {...NEW_TAB} onClick={stop} className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#e8e7ed] bg-white px-2.5 text-xs font-medium text-[#30303a] hover:border-[#cfc4fb] hover:text-[#5a3fd6]">
+          <a href={site.url} {...NEW_TAB} onClick={stop} className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#e8e7ed] bg-white px-2.5 text-xs font-medium !text-[#30303a] hover:border-[#cfc4fb] hover:text-[#5a3fd6]">
             <ExternalLink className="h-3 w-3" /> {site.label}
           </a>
         ) : null}
@@ -763,11 +763,11 @@ function VenueLinks({ venue, compact }: { venue: VenueHit; compact?: boolean }) 
   }
   return (
     <div className={`grid gap-2 ${site ? "grid-cols-2" : ""}`}>
-      <a href={directionsUrl(venue)} {...NEW_TAB} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#e8e7ed] text-sm font-medium text-[#30303a] hover:bg-[#faf9ff]">
+      <a href={directionsUrl(venue)} {...NEW_TAB} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#e8e7ed] text-sm font-medium !text-[#30303a] hover:bg-[#faf9ff]">
         <Navigation className="h-4 w-4" /> Directions
       </a>
       {site ? (
-        <a href={site.url} {...NEW_TAB} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#e8e7ed] text-sm font-medium text-[#30303a] hover:bg-[#faf9ff]">
+        <a href={site.url} {...NEW_TAB} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#e8e7ed] text-sm font-medium !text-[#30303a] hover:bg-[#faf9ff]">
           <ExternalLink className="h-4 w-4" /> {site.label}
         </a>
       ) : null}
