@@ -62,14 +62,14 @@ export const USE_CASES: UseCase[] = [
   },
   {
     id: "cowork",
-    label: "Cowork for the day",
+    label: "Cowork with others",
     short: "Coworking",
     day: "tue",
     start: "09:00",
     end: "17:00",
     capacity: "4",
     kinds: ["cafe", "office", "campus"],
-    tip: "Cafés, libraries and offices that are open through the working day.",
+    tip: "Weekly sessions where founders and builders work side by side, plus cafés and offices open all day.",
     empty: "No daytime spot fits yet. Try a shorter day, a smaller group, or Anywhere.",
   },
   {

@@ -12,6 +12,9 @@ import { getSupabase } from "@/lib/supabase";
 import { CHANGE_EVENT, listVenues } from "@/lib/pending-venues";
 import { ASK_VENUES_EVENT, FOCUS_VENUE_EVENT } from "@/components/ask-panel";
 import { USE_CASES, kindScore, venueKind, type UseCaseId } from "@/lib/use-cases";
+import { CoworkWeek } from "@/components/cowork-week";
+import { coworkSessions, type CoworkItem } from "@/lib/cowork";
+import { listSessions } from "@/lib/pending-sessions";
 import { NEW_TAB, directionsUrl, sessionLink, venueSite } from "@/lib/links";
 import { TYPE_LABEL, matchingSession, sessionsInSlot, sessionWhen, useCaseScore, venueSessions, venueSources, venueType, type Session, type VenueType } from "@/lib/venue-facts";
 import { DAY_LABEL, WEEK, dayWindow, hoursFit, type DayKey, type Hours, type HoursFit } from "@/lib/hours";
@@ -84,6 +87,39 @@ export function VenueHome() {
     void onSubmit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useCaseId, day, time, endTime, capacity]);
+  // "Show on map" from the cowork-with-others list: set the slot, search the area, then select the venue.
+  const showSearch = useRef<string | null>(null);
+  const showTarget = useRef<string | null>(null);
+  const showSawLoading = useRef(false);
+  const [showTick, setShowTick] = useState(0);
+  function showOnMap(s: CoworkItem) {
+    showTarget.current = s.venue_name ?? null;
+    showSearch.current = s.area;
+    setUseCaseId("cowork");
+    setAreaName(s.area);
+    setDay(s.day_of_week);
+    setTime(s.start_time);
+    setEndTime(s.end_time);
+    setShowTick((t) => t + 1);
+  }
+  useEffect(() => {
+    const area = showSearch.current;
+    if (!area) return;
+    showSearch.current = null;
+    void onSubmit(undefined, area);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showTick]);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const key = params.get("session");
+    if (key) {
+      const hosted = listSessions().filter((s) => s.status === "verified").map((s) => ({ ...s, key: s.id }));
+      const hit = [...coworkSessions(), ...hosted].find((s) => s.key === key);
+      if (hit) return showOnMap(hit as CoworkItem);
+    }
+    if (params.get("for") === "cowork") pickUseCase("cowork");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [center, setCenter] = useState(LONDON_CENTER);
   const [results, setResults] = useState<VenueHit[]>([]);
   const [loading, setLoading] = useState(false);
@@ -276,6 +312,21 @@ export function VenueHome() {
       .sort((a, b) => rank(b.v) - rank(a.v) || a.i - b.i)
       .map(({ v }) => v);
   }, [allResults, fitById, askIds, sessionById, confirmedOnly, useCase, useCaseId]);
+
+  useEffect(() => {
+    const target = showTarget.current;
+    if (!target) return;
+    if (loading) {
+      showSawLoading.current = true;
+      return;
+    }
+    if (!showSawLoading.current || !searched) return;
+    showSawLoading.current = false;
+    const n = (x: string) => x.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, " ").trim();
+    const hit = visibleResults.find((v) => n(v.name) === n(target) || n(v.name).startsWith(n(target)) || n(target).startsWith(n(v.name)));
+    showTarget.current = null;
+    if (hit) setSelectedId(hit.id);
+  }, [visibleResults, loading, searched]);
 
   // Sessions in this slot that the current area does not cover, so a
   // "coworking on Friday" search can point at Somerset House from anywhere.
@@ -470,6 +521,7 @@ export function VenueHome() {
               </div>
             </motion.div>
           ) : null}
+          {useCaseId === "cowork" ? <CoworkWeek onShow={showOnMap} highlightDay={day} compact /> : null}
           {!loading && elsewhere.length ? (
             <div className="rounded-2xl border border-[#f3c1d4] bg-[#fff7fa] p-3">
               <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#b4235e]">

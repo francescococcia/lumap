@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { NEW_TAB, eventLinkLabel } from "@/lib/links";
-import { ArrowLeft, CalendarPlus, Check, Clock, Copy, ExternalLink, Rss, Search, Sparkles, X } from "lucide-react";
+import { CoworkWeek } from "@/components/cowork-week";
+import { ArrowLeft, CalendarPlus, Check, Clock, Copy, ExternalLink, Laptop, Rss, Search, Sparkles, X } from "lucide-react";
+
+const COWORK_RE = /co-?work|deep work|work session|founder|builders? (club|day|session)|hack ?night|work together|laptop/i;
 
 export type FeedEvent = {
   id: string;
@@ -50,6 +53,11 @@ export function EventsFeed({ events }: { events: FeedEvent[] }) {
   const [sort, setSort] = useState<"top" | "soon">("top");
   const [query, setQuery] = useState("");
   const [tag, setTag] = useState<string | null>(null);
+  const [cowork, setCowork] = useState(false);
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get("chip") === "cowork" || window.location.hash === "#cowork") setCowork(true);
+  }, []);
 
   const tags = useMemo(() => {
     const counts = new Map<string, number>();
@@ -67,11 +75,12 @@ export function EventsFeed({ events }: { events: FeedEvent[] }) {
       if (when === "next" && (t <= week || t > 2 * week)) return false;
       if (when === "later" && t <= 2 * week) return false;
       if (tag && !e.reasons.includes(tag)) return false;
+      if (cowork && !COWORK_RE.test(`${e.title} ${e.reasons.join(" ")}`)) return false;
       if (q && !`${e.title} ${e.reasons.join(" ")}`.toLowerCase().includes(q)) return false;
       return true;
     });
     return sort === "soon" ? [...list].sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at)) : list;
-  }, [events, when, tag, query, sort]);
+  }, [events, when, tag, query, sort, cowork]);
 
   const WHEN = [
     { id: "all", label: "Any time" },
@@ -147,22 +156,30 @@ export function EventsFeed({ events }: { events: FeedEvent[] }) {
               ))}
             </div>
           </div>
-          {tags.length ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
+              <button type="button" aria-pressed={cowork} onClick={() => setCowork(!cowork)} className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ring-1 transition-colors ${cowork ? "bg-[#20202a] !text-white ring-[#20202a]" : "bg-[#f4f0ff] text-[#5a3fd6] ring-[#d9cffd] hover:ring-[#b9a7fb]"}`}>
+                <Laptop className="h-3 w-3" /> Coworking{cowork ? <X className="h-3 w-3" /> : null}
+              </button>
               {tags.map((t) => (
                 <button key={t} type="button" onClick={() => setTag(tag === t ? null : t)} className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ring-1 transition-colors ${tag === t ? "bg-[#7854f6] !text-white ring-[#7854f6]" : "bg-white text-[#5f5d6a] ring-[#ece7fd] hover:ring-[#cbbcfb]"}`}>
                   {t}{tag === t ? <X className="h-3 w-3" /> : null}
                 </button>
               ))}
             </div>
-          ) : null}
           <p className="mt-2 text-xs text-[#85838f]">{visible.length} of {events.length} events</p>
         </div>
+
+        {cowork ? (
+          <div className="mt-5">
+            <CoworkWeek />
+            <p className="mt-4 text-sm font-semibold text-[#45434e]">One-off coworking and founder events</p>
+          </div>
+        ) : null}
 
         {visible.length === 0 ? (
           <div className="mt-6 rounded-2xl border border-dashed border-[#e2dff0] bg-white p-8 text-center text-sm text-[#85838f]">
             No events match these filters.{" "}
-            <button type="button" className="font-medium text-[#7854f6]" onClick={() => { setWhen("all"); setTag(null); setQuery(""); }}>Clear filters</button>
+            <button type="button" className="font-medium text-[#7854f6]" onClick={() => { setWhen("all"); setTag(null); setQuery(""); setCowork(false); }}>Clear filters</button>
           </div>
         ) : null}
 

@@ -22,7 +22,9 @@
       "summary": "Free desk space for builders and creatives at Somerset House Exchange every Friday, 60+ desks, wifi, drinks and snacks. Entry is approval only, so register on Luma first.",
       "venue_name": "Somerset House Exchange",
       "lat": 51.510926,
-      "lng": -0.117683
+      "lng": -0.117683,
+      "with_others": true,
+      "audience": "Builders and creatives"
     },
     {
       "key": "founder-cowork-club-thursdays",
@@ -43,7 +45,9 @@
       "summary": "Free deep-work coworking for purpose-driven founders every Thursday at The Sanctuary &Soul, just off Brick Lane. The space is open from 7am to around 10pm.",
       "venue_name": "The Sanctuary &Soul",
       "lat": 51.523717,
-      "lng": -0.066484
+      "lng": -0.066484,
+      "with_others": true,
+      "audience": "Purpose-driven founders"
     },
     {
       "key": "cafe-granola-coworking-sunday",
@@ -63,7 +67,9 @@
       "source_urls": [
         "https://luma.com/4ddo9yl6"
       ],
-      "summary": "On Sundays Granola's office becomes Cafe Granola for builders: arrive 11am, shared lunch at 12, cowork 1 to 5pm. Registration was closed when checked."
+      "summary": "On Sundays Granola's office becomes Cafe Granola for builders: arrive 11am, shared lunch at 12, cowork 1 to 5pm. Registration was closed when checked.",
+      "with_others": true,
+      "audience": "Builders"
     },
     {
       "key": "newspeak-ration-club",
@@ -104,7 +110,9 @@
       "source_urls": [
         "https://newspeak.house/events"
       ],
-      "summary": "Bi-weekly hack night in the Drawing Room for technologists and campaigners working on progressive election tools. Bring a laptop."
+      "summary": "Bi-weekly hack night in the Drawing Room for technologists and campaigners working on progressive election tools. Bring a laptop.",
+      "with_others": true,
+      "audience": "Technologists and campaigners, bring a laptop"
     },
     {
       "key": "london-hackspace-open-evening",

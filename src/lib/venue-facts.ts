@@ -83,6 +83,8 @@ export type Session = {
   source_urls?: string[];
   summary: string | null;
   venue_name?: string;
+  with_others?: boolean;
+  audience?: string;
 };
 
 type Fact = {
@@ -166,4 +168,9 @@ export function sessionWhen(s: Session) {
 // Every known session for this use case and slot, wherever it is.
 export function sessionsInSlot(useCase: UseCaseId, day: DayKey, start: string, end: string) {
   return SESSIONS.filter((s) => matchingSession({ name: s.venue_name, sessions: [s] }, useCase, day, start, end)) as (Session & { lat: number; lng: number })[];
+}
+
+/** Every bundled session with coordinates (for the cowork-with-others list and calendar feed). */
+export function allSessions() {
+  return SESSIONS.filter((s) => typeof (s as { lat?: number }).lat === "number") as (Session & { lat: number; lng: number })[];
 }
