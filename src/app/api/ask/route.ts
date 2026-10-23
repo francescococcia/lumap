@@ -51,7 +51,14 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "Enter a question under 4,000 characters." }, { status: 400 });
   }
 
-  const result = (await askCognee(question.trim())) ?? (COWORK_Q.test(question) ? coworkFallback() : null);
+  // Statements like "I'm a founder and want to…" get small talk back from the graph,
+  // so coworking questions are sent as an explicit request for venues and sessions.
+  const cowork = COWORK_Q.test(question);
+  const query = cowork
+    ? `${question.trim()}\n\nList the specific London venues and recurring sessions that fit: name, day, time, address with postcode, price and how to register.`
+    : question.trim();
+  let result = await askCognee(query);
+  if (cowork && (!result || result.length < 200)) result = coworkFallback();
   if (!result) {
     return Response.json(
       { error: "Community memory is unavailable or returned no answer.", answer: null, sources: [] },
