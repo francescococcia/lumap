@@ -1,7 +1,7 @@
 import { askCognee } from "../../../../scripts/cognee_search";
-import { intentOf, localAnswer, placesIn, venueDirectory, type VenueRow } from "../../../lib/ask-local";
-import { dateLabel, londonToday } from "../../../lib/dates";
-import type { When } from "../../../lib/when";
+import { intentOf, localAnswer, placesIn, sessionTitlesAt, venueDirectory, type VenueRow } from "../../../lib/ask-local";
+import { dateLabel, londonToday, weekdayOf } from "../../../lib/dates";
+import { datesIn, type When } from "../../../lib/when";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,17 +9,17 @@ export const maxDuration = 30;
 
 // Keeps answers to what the stored documents say: no guessed capacities, addresses or prices.
 const GROUNDING =
-  "Only state facts written in the context. If an important detail such as a capacity, address, price or time is not there, say it's not listed; never estimate it (for example a capacity from past attendance) and don't list empty fields. Don't invent venues, addresses or numbers.";
+  "Only state facts written in the context. Never estimate a capacity, address, price or time (for example a capacity from past attendance). Leave out details you don't have; only say 'not listed' when they asked for that detail. Don't invent venues, addresses or numbers.";
 
 function systemPrompt(today: string, when: When | null) {
   return [
     `You are Lumap, a friendly London local who organises community events and knows the city's venues. Today is ${dateLabel(today)} ${today.slice(0, 4)} in London.`,
     when
-      ? `They mean ${when.phrase} (${when.label}). Only suggest sessions and venues that fit those dates, and put the actual date next to each pick, e.g. "${dateLabel(when.from)}". A weekly session runs on that weekday's date within the range.`
+      ? `They mean ${when.phrase}. The dates are: ${datesIn(when).map(dateLabel).join(", ")}. Only suggest sessions and venues that fit those dates, and put the date from that list next to each pick (a Friday session is on the Friday listed).`
       : "",
     "Answer using only the provided context, the way you'd reply to a friend, in British English:",
     "- one short, warm opening sentence (no heading);",
-    "- then 2 to 4 picks as a bulleted list, each written as '**Venue name**: one line on why it fits', with the day or date, time and price when given, and the registration link if there is one;",
+    "- then 2 to 4 picks as a bulleted list, each starting with the venue's name in bold, e.g. '**Somerset House Exchange**: Co-Working Fridays, Fri 30 Oct, 10:00-20:30, free.' plus one line on why it fits, and the registration link written as [Register on Luma](url) if there is one;",
     "- end with one natural follow-up question, like 'Want something closer to Shoreditch?'.",
     "Keep it under 130 words. No tables, no headings. Never mention memory, databases, documents, records, listings, sources or 'the context'.",
     GROUNDING,
@@ -42,7 +42,24 @@ function splitEvidence(result: string): { answer: string; sources: string[] } {
   return { answer, sources };
 }
 
-type Hit = Omit<VenueRow, "guest_count_lower_bound"> & { reason: string | null; distance_m: number | null; sessions?: unknown };
+// The model sometimes computes weekdays from the wrong calendar ("Fri 27 Oct"); use the real date for that weekday.
+const WD = "(Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*\\.?,?\\s+(\\d{1,2})(?:st|nd|rd|th)?\\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*";
+function fixDates(text: string, when: When | null) {
+  if (!when) return text;
+  const byDay = new Map(datesIn(when).map((d) => [weekdayOf(d), dateLabel(d)]));
+  return text.replace(new RegExp(WD, "g"), (m, day: string) => byDay.get(day.toLowerCase().slice(0, 3) as never) ?? m);
+}
+
+/** Drops "time: not listed, price: not listed" filler the model adds for fields nobody asked about. */
+function tidy(text: string) {
+  return text
+    .replace(/[;,–-]?\s*(?:time|price|registration|address|capacity|day)\s*:\s*not listed\b\.?/gi, "")
+    .replace(/(?<!\])\(\s*(https?:\/\/[^\s)]+)\s*\)/g, (_m, url: string) => `[${/^https?:\/\/(www\.)?(luma\.com|lu\.ma)\//i.test(url) ? "Register on Luma" : "Event page"}](${url})`)
+    .replace(/register on Luma\s*\[Register on Luma\]/gi, "[Register on Luma]")
+    .replace(/[ \t]+$/gm, "");
+}
+
+type Hit = Omit<VenueRow, "guest_count_lower_bound"> & { reason: string | null; distance_m: number | null; sessions?: unknown; aliases?: string[] };
 
 /** The same row shape the map search uses (with sessions and reason), so the venue panel opens fully. */
 async function toHits(rows: VenueRow[]): Promise<Hit[]> {
@@ -50,7 +67,8 @@ async function toHits(rows: VenueRow[]): Promise<Hit[]> {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   return Promise.all(
     rows.slice(0, 8).map(async (row) => {
-      const plain: Hit = { ...row, reason: null, distance_m: null };
+      const aliases = sessionTitlesAt(row);
+      const plain: Hit = { ...row, reason: null, distance_m: null, aliases };
       if (!url || !key) return plain;
       try {
         const res = await fetch(`${url.replace(/\/$/, "")}/rest/v1/rpc/search_venues`, {
@@ -62,7 +80,7 @@ async function toHits(rows: VenueRow[]): Promise<Hit[]> {
         });
         const list = res.ok ? ((await res.json()) as Hit[]) : [];
         const hit = Array.isArray(list) ? list.find((h) => h.id === row.id) : undefined;
-        return hit ? { ...hit, distance_m: null } : plain;
+        return hit ? { ...hit, distance_m: null, aliases } : plain;
       } catch {
         return plain;
       }
@@ -105,7 +123,9 @@ export async function POST(request: Request): Promise<Response> {
   const raw = await askCognee(query, { systemPrompt: systemPrompt(today, intent.when), timeoutMs: 22000 });
   if (raw && raw.length > 80) {
     // The model writes non-breaking hyphens (U+2011), which break URLs like luma.com/london-oct-23.
-    const { answer, sources } = splitEvidence(raw.replace(/[\u2010\u2011]/g, "-"));
+    const split = splitEvidence(raw.replace(/[\u2010\u2011]/g, "-"));
+    const answer = tidy(fixDates(split.answer, intent.when));
+    const sources = split.sources;
     const rows = await rowsPromise;
     return Response.json({ answer, sources, places: await toHits(placesIn(answer, rows)), when: intent.when, from: "memory" });
   }

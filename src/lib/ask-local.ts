@@ -6,7 +6,7 @@ import { coworkSessions, nearestArea, type CoworkItem } from "@/lib/cowork";
 import { addDays, dateLabel, londonToday, sessionOnDate, weekdayOf } from "@/lib/dates";
 import { dayWindow, type DayKey, type Hours } from "@/lib/hours";
 import { sessionLink } from "@/lib/links";
-import { TYPE_LABEL, venueGoodFor, venueType, type GoodFor } from "@/lib/venue-facts";
+import { allSessions, TYPE_LABEL, venueGoodFor, venueType, type GoodFor } from "@/lib/venue-facts";
 import { mentionedIn } from "@/lib/venue-match";
 import { datesIn, resolveWhen, type When } from "@/lib/when";
 
@@ -224,10 +224,17 @@ export function localAnswer(intent: Intent, rows: VenueRow[], today = londonToda
 /** Known venues named in an answer, including the venue of any session mentioned by title. */
 export function placesIn(text: string, rows: VenueRow[]): VenueRow[] {
   const direct = mentionedIn(text, rows);
-  const viaSessions = mentionedIn(text, coworkSessions().map((s) => ({ ...s, name: s.title })))
+  const viaSessions = mentionedIn(text, allSessions().map((s) => ({ ...s, name: s.title })))
     .map((s) => rows.find((r) => s.venue_name && mentionedIn(s.venue_name, [r]).length))
     .filter((r): r is VenueRow => Boolean(r));
   const out = [...direct];
   for (const r of viaSessions) if (!out.some((o) => o.id === r.id)) out.push(r);
   return out;
+}
+
+/** Titles of the bundled sessions held at this venue, so an answer that names only the session still maps to it. */
+export function sessionTitlesAt(row: Pick<VenueRow, "name">): string[] {
+  return allSessions()
+    .filter((s) => s.venue_name && mentionedIn(s.venue_name, [row]).length)
+    .map((s) => s.title);
 }
