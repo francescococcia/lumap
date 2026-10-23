@@ -14,7 +14,8 @@ import { ASK_VENUES_EVENT, FOCUS_VENUE_EVENT } from "@/components/ask-panel";
 import { USE_CASES, kindScore, venueKind, type UseCaseId } from "@/lib/use-cases";
 import { CoworkWeek } from "@/components/cowork-week";
 import { coworkSessions, type CoworkItem } from "@/lib/cowork";
-import { listSessions } from "@/lib/pending-sessions";
+import { listSessions, SESSIONS_CHANGE_EVENT } from "@/lib/pending-sessions";
+import { refreshQueue } from "@/lib/submissions";
 import { NEW_TAB, directionsUrl, sessionLink, venueSite } from "@/lib/links";
 import { TYPE_LABEL, matchingSession, sessionsInSlot, sessionWhen, useCaseScore, venueSessions, venueSources, venueType, type Session, type VenueType } from "@/lib/venue-facts";
 import { DAY_LABEL, WEEK, dayWindow, hoursFit, type DayKey, type Hours, type HoursFit } from "@/lib/hours";
@@ -113,9 +114,14 @@ export function VenueHome() {
     const params = new URLSearchParams(window.location.search);
     const key = params.get("session");
     if (key) {
-      const hosted = listSessions().filter((s) => s.status === "verified").map((s) => ({ ...s, key: s.id }));
-      const hit = [...coworkSessions(), ...hosted].find((s) => s.key === key);
-      if (hit) return showOnMap(hit as CoworkItem);
+      const hit = coworkSessions().find((s) => s.key === key);
+      if (hit) return showOnMap(hit);
+      // Community-hosted sessions come from the shared queue, which loads asynchronously.
+      void refreshQueue().then(() => {
+        const hosted = listSessions().find((s) => s.id === key && s.status === "verified");
+        if (hosted) showOnMap({ ...hosted, key: hosted.id } as unknown as CoworkItem);
+      });
+      return;
     }
     if (params.get("for") === "cowork") pickUseCase("cowork");
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -247,13 +253,50 @@ export function VenueHome() {
             status: "verified",
             reason: v.note ? `New: vouched by 2 organisers · ${v.note}` : "New: vouched by 2 organisers",
             distance_m: null,
-          })),
+          }) as VenueHit)
+          .concat(
+            // Vouched community cowork sessions show up as pins at their venue.
+            listSessions()
+              .filter((x) => x.status === "verified")
+              .map((x) => ({
+                id: x.id,
+                name: x.venue_name || x.title,
+                address: [x.address, x.area].filter(Boolean).join(", ") || null,
+                lat: x.lat,
+                lng: x.lng,
+                capacity: null,
+                status: "verified",
+                reason: `Community cowork: ${x.title}, vouched by 2 organisers`,
+                distance_m: null,
+                venue_type: "cafe",
+                good_for: ["coworking"],
+                sessions: [{
+                  key: x.id,
+                  title: x.title,
+                  organiser: x.organiser || null,
+                  use_case: "cowork",
+                  day_of_week: x.day_of_week,
+                  start_time: x.start_time,
+                  end_time: x.end_time,
+                  cadence: "weekly",
+                  price: x.price || null,
+                  rsvp: x.url ? "Register via the host's link" : null,
+                  url: x.url || null,
+                  summary: x.note || null,
+                  venue_name: x.venue_name,
+                  with_others: true,
+                  audience: "Community hosted, vouched by 2 organisers",
+                }],
+              }) as VenueHit),
+          ),
       );
     load();
     window.addEventListener(CHANGE_EVENT, load);
+    window.addEventListener(SESSIONS_CHANGE_EVENT, load);
     window.addEventListener("storage", load);
     return () => {
       window.removeEventListener(CHANGE_EVENT, load);
+      window.removeEventListener(SESSIONS_CHANGE_EVENT, load);
       window.removeEventListener("storage", load);
     };
   }, []);
