@@ -14,7 +14,7 @@ function formatUtc(value: string): string | undefined {
   return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
 }
 
-function foldLine(line: string): string {
+export function foldLine(line: string): string {
   const encoder = new TextEncoder();
   let output = "";
   let segment = "";
