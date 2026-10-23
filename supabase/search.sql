@@ -7,7 +7,7 @@
 -- start_time: '19:00'. Null with a day means "any time that day".
 -- min_capacity: known capacity below this is dropped. Null capacity still returns.
 --
--- Rank: fit, then how many community events and the largest guest count, then distance.
+-- Rank: a recurring session on that day and time first, then fit, then how many community events and the largest guest count, then distance.
 -- Fit puts a known capacity that is open that slot first. Unknown capacity ranks lower.
 -- A known capacity that is closed that slot ranks below an unknown capacity that is open.
 --
@@ -115,7 +115,11 @@ create type public.search_venue_result as (
   largest_guest_count integer,
   distance_m double precision,
   score numeric,
-  reason text
+  reason text,
+  venue_type text,
+  good_for text[],
+  source_url text,
+  sessions jsonb
 );
 
 create or replace function public.search_venues(
@@ -196,6 +200,38 @@ begin
     from public.hosted_events h
     group by h.venue_id
   ),
+  -- Recurring public sessions (Co-Working Fridays and so on) per venue.
+  -- on_slot is true when one runs on the requested day and, if a time was
+  -- given, is running at that time.
+  sess as (
+    select
+      r.venue_id,
+      jsonb_agg(
+        jsonb_build_object(
+          'id', r.id,
+          'title', r.title,
+          'organiser', r.organiser,
+          'use_case', r.use_case,
+          'day_of_week', r.day_of_week,
+          'start_time', to_char(r.start_time, 'HH24:MI'),
+          'end_time', to_char(r.end_time, 'HH24:MI'),
+          'cadence', r.cadence,
+          'price', r.price,
+          'rsvp', r.rsvp,
+          'url', r.url,
+          'source_url', r.source_url,
+          'summary', r.summary
+        )
+        order by r.day_of_week, r.start_time
+      ) as items,
+      bool_or(
+        day_key is not null
+        and r.day_of_week = day_key
+        and (q_start is null or (q_start >= r.start_time and q_start < r.end_time))
+      ) as on_slot
+    from public.recurring_sessions r
+    group by r.venue_id
+  ),
   scored as (
     select
       n.id as venue_id,
@@ -212,6 +248,11 @@ begin
       n.weekend_hours as venue_weekend_hours,
       n.notes as venue_notes,
       n.status as venue_status,
+      n.venue_type as venue_kind,
+      n.good_for as venue_good_for,
+      n.source_url as venue_source_url,
+      se.items as venue_sessions,
+      coalesce(se.on_slot, false) as on_slot,
       n.dist_m,
       coalesce(h.event_count, 0) as event_count,
       h.largest,
@@ -232,9 +273,11 @@ begin
         when n.capacity is not null
           then 20
         else 10
-      end as fit_rank
+      end
+      + case when coalesce(se.on_slot, false) then 100 else 0 end as fit_rank
     from nearby n
     left join hosted h on h.venue_id = n.id
+    left join sess se on se.venue_id = n.id
   )
   select
     s.venue_id,
@@ -262,6 +305,7 @@ begin
     )::numeric as score,
     concat_ws(
       ' · ',
+      case when s.on_slot then 'recurring session that day' end,
       case
         when s.venue_capacity is null then 'capacity unknown'
         when q_min is not null and s.venue_capacity >= q_min then 'fits ' || q_min::text
@@ -288,7 +332,11 @@ begin
           || case when s.event_count = 1 then ' community event' else ' community events' end
           || ', largest ' || s.largest::text
       end
-    ) as reason
+    ) as reason,
+    s.venue_kind,
+    s.venue_good_for,
+    s.venue_source_url,
+    coalesce(s.venue_sessions, '[]'::jsonb)
   from scored s
   order by s.fit_rank desc, s.event_count desc, coalesce(s.largest, 0) desc, s.dist_m asc
   limit q_limit;
@@ -296,7 +344,7 @@ end;
 $$;
 
 comment on function public.search_venues(double precision, double precision, integer, integer, text, time, integer) is
-  'Top venues within radius_m of (lat, lng). Ranked by fit, past hosting, then distance. Does not return contact.';
+  'Top venues within radius_m of (lat, lng). Ranked by recurring session on the slot, fit, past hosting, then distance. Returns venue_type, good_for and sessions. Does not return contact.';
 
 revoke all on function public.search_venues(double precision, double precision, integer, integer, text, time, integer) from public;
 grant execute on function public.search_venues(double precision, double precision, integer, integer, text, time, integer) to anon, authenticated, service_role, postgres;

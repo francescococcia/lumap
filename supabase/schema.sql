@@ -40,6 +40,7 @@ drop view if exists public.venues_organiser;
 drop view if exists public.venues_public;
 drop type if exists public.search_venue_result;
 
+drop table if exists public.recurring_sessions cascade;
 drop table if exists public.hosted_events cascade;
 drop table if exists public.venues cascade;
 drop table if exists public.vouches cascade;
@@ -124,6 +125,9 @@ create table public.venues (
   created_by uuid references public.organisers (id) on delete set null,
   source text,
   seed_key text unique,
+  venue_type text,
+  good_for text[] not null default '{}',
+  source_url text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint venues_capacity_nonnegative check (capacity is null or capacity >= 0),
@@ -133,8 +137,24 @@ create table public.venues (
   constraint venues_status check (status in ('pending', 'verified')),
   constraint venues_hours_object check (jsonb_typeof(hours) = 'object'),
   constraint venues_lat check (lat between -90 and 90),
-  constraint venues_lng check (lng between -180 and 180)
+  constraint venues_lng check (lng between -180 and 180),
+  constraint venues_type check (venue_type is null or venue_type in (
+    'cafe', 'coworking', 'library', 'community_space', 'bar', 'hotel', 'private_room',
+    'studio', 'office', 'campus', 'hall', 'shop', 'outdoor', 'other'
+  )),
+  constraint venues_good_for check (
+    good_for <@ array['coworking', 'community_event', 'private_party', 'workshop']::text[]
+  )
 );
+
+comment on column public.venues.venue_type is
+  'What kind of place it is. Null means not checked yet.';
+
+comment on column public.venues.good_for is
+  'Use cases the venue suits: coworking, community_event, private_party, workshop.';
+
+comment on column public.venues.source_url is
+  'Public page the type, hours or capacity came from.';
 
 comment on column public.venues.capacity is
   'Verified capacity. Null means unknown. Luma RSVP counts are not stored here.';
@@ -176,3 +196,29 @@ comment on column public.hosted_events.event_date is
 create index hosted_events_venue_idx on public.hosted_events (venue_id);
 create index hosted_events_date_idx on public.hosted_events (event_date desc);
 create index hosted_events_community_idx on public.hosted_events (community_id);
+
+-- Public recurring sessions at a venue, e.g. Co-Working Fridays at Somerset House.
+create table public.recurring_sessions (
+  id uuid primary key default gen_random_uuid(),
+  venue_id uuid not null references public.venues (id) on delete cascade,
+  session_key text unique,
+  title text not null,
+  organiser text,
+  use_case text not null,
+  day_of_week text not null,
+  start_time time not null,
+  end_time time not null,
+  cadence text,
+  price text,
+  rsvp text,
+  url text,
+  source_url text not null,
+  summary text,
+  verified_at date,
+  created_at timestamptz not null default now(),
+  constraint recurring_sessions_use_case check (use_case in ('meetup', 'cowork', 'party', 'workshop')),
+  constraint recurring_sessions_day check (day_of_week in ('sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat')),
+  constraint recurring_sessions_times check (end_time > start_time)
+);
+
+create index recurring_sessions_venue_idx on public.recurring_sessions (venue_id);

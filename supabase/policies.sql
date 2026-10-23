@@ -422,6 +422,9 @@ select
   created_by,
   source,
   seed_key,
+  venue_type,
+  good_for,
+  source_url,
   created_at,
   updated_at
 from public.venues;
@@ -504,6 +507,9 @@ grant select (
   created_by,
   source,
   seed_key,
+  venue_type,
+  good_for,
+  source_url,
   created_at,
   updated_at
 ) on public.venues to anon, authenticated;
@@ -517,6 +523,14 @@ grant insert on public.hosted_events to authenticated;
 grant update on public.hosted_events to authenticated;
 
 grant select on public.venues_public to anon, authenticated;
+
+-- Recurring sessions are public listings. Only the service role writes them.
+alter table public.recurring_sessions enable row level security;
+drop policy if exists recurring_sessions_select on public.recurring_sessions;
+create policy recurring_sessions_select on public.recurring_sessions
+  for select
+  using (true);
+grant select on public.recurring_sessions to anon, authenticated;
 grant select on public.venues_organiser to authenticated;
 
 grant insert (id, auth_user_id, email, display_name)

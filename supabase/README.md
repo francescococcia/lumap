@@ -9,6 +9,14 @@ Paste these files into the Supabase SQL editor, in order, on a project that alre
 
 `scripts/seed.py` rewrites `seed.sql` from `config/city.json`, `seed/venues-candidates.json` and `seed/hosted_events.json`. Replace the placeholder root emails in `config/city.json` with the real leads, run the script, and paste `seed.sql` again.
 
+Then run `node scripts/apply_public_data.mjs` on a machine with `.env`. It uses the service role key, prints no secrets, and loads the public venue facts (`src/data/venue-facts.json`) and recurring sessions (`src/data/recurring-sessions.json`). Run it again after any re-paste of `seed.sql`, since the seed resets the Luma rows.
+
+## Migrations
+
+An existing database gets new changes from `migrations/`, pasted once each in date order. Each file is safe to paste twice and deletes no rows. A fresh database doesn't need them, because the four files above already include them.
+
+- `20261023_venue_types_sessions.sql`: adds `venues.venue_type`, `venues.good_for` and `venues.source_url`, plus a public `recurring_sessions` table (title, organiser, use_case, day_of_week, start and end time, cadence, price, rsvp, url, source_url). It also replaces `search_venues` with the same arguments; each row now carries `venue_type`, `good_for`, `source_url` and `sessions`, and a venue with a session running in the requested slot ranks first.
+
 Trust: an organiser is vouched if they are a root, or an unrevoked vouch chain reaches them from a root. `is_vouched(uid)` reads that live, so setting `vouches.revoked_at` takes effect on the next call. Only a vouched organiser can insert or update a venue, or create a vouch.
 
 ## What the app calls
