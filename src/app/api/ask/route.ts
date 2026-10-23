@@ -1,4 +1,21 @@
 import { askCognee } from "../../../../scripts/cognee_search";
+import { coworkWeek, coworkSessions, isWeekly } from "../../../lib/cowork";
+import { sessionLink } from "../../../lib/links";
+
+const COWORK_Q = /co-?work|work (alongside|with|next to)|deep work|founders?|desk|laptop/i;
+
+// If Cognee is slow or down, answer coworking questions from the bundled public sessions.
+function coworkFallback(): string {
+  const lines = ["**This week you can cowork with others** (from Lumap's checked public listings; Community memory didn't answer in time)", ""];
+  for (const g of coworkWeek(coworkSessions())) {
+    for (const s of g.sessions) {
+      const link = sessionLink(s);
+      lines.push(`- **${s.title}**, ${g.label}, ${s.start_time}–${s.end_time}${isWeekly(s) ? "" : ` (${s.cadence})`} at ${s.venue_name}, ${s.area}. ${[s.price, s.rsvp].filter(Boolean).join(". ")}${link ? `. ${link.label}: ${link.url}` : ""}`);
+    }
+  }
+  lines.push("", "Evidence:", ...coworkSessions().map((s) => sessionLink(s)?.url).filter((u): u is string => Boolean(u)));
+  return lines.join("\n");
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,7 +51,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "Enter a question under 4,000 characters." }, { status: 400 });
   }
 
-  const result = await askCognee(question.trim());
+  const result = (await askCognee(question.trim())) ?? (COWORK_Q.test(question) ? coworkFallback() : null);
   if (!result) {
     return Response.json(
       { error: "Community memory is unavailable or returned no answer.", answer: null, sources: [] },
