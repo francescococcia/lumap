@@ -6,19 +6,41 @@ import { ArrowLeft, CheckCircle2, ShieldCheck, Undo2, Users, X } from "lucide-re
 import { listSessions, rejectSession, revokeSession, SESSIONS_CHANGE_EVENT, vouchSession, type PendingSession } from "@/lib/pending-sessions";
 import { DAY_LABEL } from "@/lib/hours";
 import { CHANGE_EVENT, listVenues, rejectVenue, revokeVenue, vouchVenue, VOUCHES_NEEDED, type PendingVenue } from "@/lib/pending-venues";
+import { AuthMenu } from "@/components/auth-menu";
+import { requestSignIn, takeIntent, useUser } from "@/lib/auth";
+import type { Result, Vote } from "@/lib/submissions";
 
-type VoteResult = { ok: boolean; error?: string } | void;
+type Kind = "venue" | "session";
+const ACTIONS: Record<Kind, Record<Vote | "revoke", (id: string) => Promise<Result>>> = {
+  venue: { vouch: vouchVenue, reject: rejectVenue, revoke: revokeVenue },
+  session: { vouch: vouchSession, reject: rejectSession, revoke: revokeSession },
+};
 
 export default function ReviewPage() {
-  const [notice, setNotice] = useState<{ id: string; text: string } | null>(null);
+  const [notice, setNotice] = useState<{ id: string; text: string; ok?: boolean } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  async function act(id: string, fn: () => Promise<VoteResult>) {
+  const user = useUser();
+  async function act(id: string, kind: Kind, action: Vote | "revoke") {
+    if (!user && action !== "revoke") {
+      requestSignIn({ type: "vote", id, kind, vote: action });
+      return;
+    }
     setBusyId(id);
     setNotice(null);
-    const res = await fn();
+    const res = await ACTIONS[kind][action](id);
     setBusyId(null);
-    if (res && !res.ok && res.error) setNotice({ id, text: res.error });
+    if (!res.ok) {
+      if (res.signIn && action !== "revoke") requestSignIn({ type: "vote", id, kind, vote: action });
+      setNotice({ id, text: res.error });
+    } else if (action === "revoke") setNotice({ id, text: "Your vote is withdrawn.", ok: true });
   }
+  // Resume a vouch/reject that was started before signing in.
+  useEffect(() => {
+    if (!user) return;
+    const intent = takeIntent("vote");
+    if (intent) void act(intent.id, intent.kind, intent.vote);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
   const [venues, setVenues] = useState<PendingVenue[]>([]);
   useEffect(() => {
     const load = () => setVenues(listVenues());
@@ -51,14 +73,17 @@ export default function ReviewPage() {
   return (
     <main className="min-h-screen bg-[#fafaf7] px-4 py-6 text-[#20202a] sm:px-8 sm:py-10">
       <div className="mx-auto w-full max-w-3xl">
-        <a href="/" className="inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-medium text-[#666570] transition-colors hover:text-[#7854f6]">
-          <ArrowLeft className="h-4 w-4" /> Back to the map
-        </a>
+        <div className="flex items-center justify-between">
+          <a href="/" className="inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-medium text-[#666570] transition-colors hover:text-[#7854f6]">
+            <ArrowLeft className="h-4 w-4" /> Back to the map
+          </a>
+          <AuthMenu />
+        </div>
         <section className="mt-6 rounded-3xl border border-[#ecebf0] bg-gradient-to-br from-[#efe9ff] via-[#f7f4ff] to-[#e8f7ef] p-6 sm:p-8">
           <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#8473c2]"><ShieldCheck className="h-4 w-4" /> Organiser review</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-[-0.03em] sm:text-3xl">Review queue</h1>
           <p className="mt-2 max-w-xl text-[15px] leading-7 text-[#5f5d6a]">
-            New venues and cowork sessions need {VOUCHES_NEEDED} vouches from different organisers. Everyone sees this same queue, each browser gets one vote per item, and {VOUCHES_NEEDED} rejections take an item off the queue. Once vouched, it goes live on the map and in the weekly cowork list.
+            New venues and cowork sessions need {VOUCHES_NEEDED} vouches from different organisers. Anyone can read this queue. To vote, sign in with your email: one vote per person per item, no vouching for your own submissions, and you can withdraw your vote later. {VOUCHES_NEEDED} rejections take an item off the queue; once vouched, it goes live on the map and in the weekly cowork list.
           </p>
         </section>
 
@@ -84,15 +109,29 @@ export default function ReviewPage() {
                 <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#f1eff6]">
                   <motion.div className="h-full rounded-full bg-[#7854f6]" animate={{ width: `${(v.vouches / VOUCHES_NEEDED) * 100}%` }} />
                 </div>
-                <div className="mt-4 flex gap-2">
-                  <button type="button" disabled={Boolean(v.myVote) || busyId === v.id} onClick={() => act(v.id, () => vouchVenue(v.id))} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-[#7854f6] text-sm font-medium !text-white hover:bg-[#6842eb] disabled:opacity-50">
-                    <ShieldCheck className="h-4 w-4" /> {v.myVote === "vouch" ? "You vouched" : "Vouch, I've hosted here"}
-                  </button>
-                  <button type="button" disabled={Boolean(v.myVote) || busyId === v.id} onClick={() => act(v.id, () => rejectVenue(v.id))} className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#e8e7ed] px-4 text-sm font-medium text-[#6f6d78] hover:bg-[#fff6f5] hover:text-[#9e4038]">
-                    <X className="h-4 w-4" /> Reject
-                  </button>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  {v.myVote ? (
+                    <>
+                      <span className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-[#f1edff] text-sm font-medium text-[#5a3fd6]">
+                        {v.myVote === "vouch" ? <ShieldCheck className="h-4 w-4" /> : <X className="h-4 w-4" />} {v.myVote === "vouch" ? "You vouched" : "You rejected this"}
+                      </span>
+                      <button type="button" disabled={busyId === v.id} onClick={() => act(v.id, "venue", "revoke")} className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#e8e7ed] px-4 text-sm font-medium text-[#6f6d78] hover:bg-[#f4f3f7] disabled:opacity-50">
+                        <Undo2 className="h-4 w-4" /> Withdraw my vote
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" disabled={busyId === v.id} onClick={() => act(v.id, "venue", "vouch")} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-[#7854f6] text-sm font-medium !text-white hover:bg-[#6842eb] disabled:opacity-50">
+                        <ShieldCheck className="h-4 w-4" /> Vouch, I've hosted here
+                      </button>
+                      <button type="button" disabled={busyId === v.id} onClick={() => act(v.id, "venue", "reject")} className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#e8e7ed] px-4 text-sm font-medium text-[#6f6d78] hover:bg-[#fff6f5] hover:text-[#9e4038] disabled:opacity-50">
+                        <X className="h-4 w-4" /> Reject
+                      </button>
+                    </>
+                  )}
                 </div>
-                {notice?.id === v.id ? <p role="status" className="mt-2 text-sm text-[#9e4038]">{notice.text}</p> : null}
+                {v.mine ? <p className="mt-2 text-xs text-[#85838f]">You submitted this, so it needs vouches from {VOUCHES_NEEDED} other people.</p> : null}
+                {notice?.id === v.id ? <p role="status" className={`mt-2 text-sm ${notice.ok ? "text-[#2f9e62]" : "text-[#9e4038]"}`}>{notice.text}</p> : null}
               </motion.article>
             ))}
           </AnimatePresence>
@@ -122,15 +161,29 @@ export default function ReviewPage() {
                 <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#f1eff6]">
                   <motion.div className="h-full rounded-full bg-[#7854f6]" animate={{ width: `${(s.vouches / VOUCHES_NEEDED) * 100}%` }} />
                 </div>
-                <div className="mt-4 flex gap-2">
-                  <button type="button" disabled={Boolean(s.myVote) || busyId === s.id} onClick={() => act(s.id, () => vouchSession(s.id))} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-[#7854f6] text-sm font-medium !text-white hover:bg-[#6842eb] disabled:opacity-50">
-                    <ShieldCheck className="h-4 w-4" /> {s.myVote === "vouch" ? "You vouched" : "Vouch, I know this session"}
-                  </button>
-                  <button type="button" disabled={Boolean(s.myVote) || busyId === s.id} onClick={() => act(s.id, () => rejectSession(s.id))} className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#e8e7ed] px-4 text-sm font-medium text-[#6f6d78] hover:bg-[#fff6f5] hover:text-[#9e4038]">
-                    <X className="h-4 w-4" /> Reject
-                  </button>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  {s.myVote ? (
+                    <>
+                      <span className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-[#f1edff] text-sm font-medium text-[#5a3fd6]">
+                        {s.myVote === "vouch" ? <ShieldCheck className="h-4 w-4" /> : <X className="h-4 w-4" />} {s.myVote === "vouch" ? "You vouched" : "You rejected this"}
+                      </span>
+                      <button type="button" disabled={busyId === s.id} onClick={() => act(s.id, "session", "revoke")} className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#e8e7ed] px-4 text-sm font-medium text-[#6f6d78] hover:bg-[#f4f3f7] disabled:opacity-50">
+                        <Undo2 className="h-4 w-4" /> Withdraw my vote
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" disabled={busyId === s.id} onClick={() => act(s.id, "session", "vouch")} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-[#7854f6] text-sm font-medium !text-white hover:bg-[#6842eb] disabled:opacity-50">
+                        <ShieldCheck className="h-4 w-4" /> Vouch, I know this session
+                      </button>
+                      <button type="button" disabled={busyId === s.id} onClick={() => act(s.id, "session", "reject")} className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#e8e7ed] px-4 text-sm font-medium text-[#6f6d78] hover:bg-[#fff6f5] hover:text-[#9e4038] disabled:opacity-50">
+                        <X className="h-4 w-4" /> Reject
+                      </button>
+                    </>
+                  )}
                 </div>
-                {notice?.id === s.id ? <p role="status" className="mt-2 text-sm text-[#9e4038]">{notice.text}</p> : null}
+                {s.mine ? <p className="mt-2 text-xs text-[#85838f]">You submitted this, so it needs vouches from {VOUCHES_NEEDED} other people.</p> : null}
+                {notice?.id === s.id ? <p role="status" className={`mt-2 text-sm ${notice.ok ? "text-[#2f9e62]" : "text-[#9e4038]"}`}>{notice.text}</p> : null}
               </motion.article>
             ))}
           </AnimatePresence>
@@ -144,9 +197,9 @@ export default function ReviewPage() {
                   <span className="font-medium">{s.title}</span>
                   <span className="text-[#85838f]">{s.status === "verified" ? "in the cowork list" : "rejected"}</span>
                 </div>
-                {s.status === "verified" && !s.shared ? (
-                  <button type="button" onClick={() => revokeSession(s.id)} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-[#6f6d78] hover:bg-[#f4f3f7]">
-                    <Undo2 className="h-3.5 w-3.5" /> Revoke a vouch
+                {s.status === "verified" && s.myVote === "vouch" ? (
+                  <button type="button" disabled={busyId === s.id} onClick={() => act(s.id, "session", "revoke")} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-[#6f6d78] hover:bg-[#f4f3f7]">
+                    <Undo2 className="h-3.5 w-3.5" /> Revoke my vouch
                   </button>
                 ) : null}
               </div>
@@ -165,9 +218,9 @@ export default function ReviewPage() {
                     <span className="font-medium">{v.name}</span>
                     <span className="text-[#85838f]">{v.status === "verified" ? "live on the map" : "rejected"}</span>
                   </div>
-                  {v.status === "verified" && !v.shared ? (
-                    <button type="button" onClick={() => revokeVenue(v.id)} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-[#6f6d78] hover:bg-[#f4f3f7]">
-                      <Undo2 className="h-3.5 w-3.5" /> Revoke a vouch
+                  {v.status === "verified" && v.myVote === "vouch" ? (
+                    <button type="button" disabled={busyId === v.id} onClick={() => act(v.id, "venue", "revoke")} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-[#6f6d78] hover:bg-[#f4f3f7]">
+                      <Undo2 className="h-3.5 w-3.5" /> Revoke my vouch
                     </button>
                   ) : null}
                 </motion.div>

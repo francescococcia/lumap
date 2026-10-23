@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { CheckCircle2, Plus, ShieldCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LONDON_AREAS } from "@/lib/areas";
+import { currentUserId, requestSignIn, takeIntent, useUser } from "@/lib/auth";
 import { addVenue } from "@/lib/pending-venues";
 import { FancySelect, Stepper } from "@/components/ui/fancy-select";
 
@@ -12,7 +13,7 @@ const AREAS = LONDON_AREAS.map((a) => a.name);
 
 export function AddVenueDialog() {
   const [open, setOpen] = useState(false);
-  const [submitted, setSubmitted] = useState<{ name: string; area: string; local?: boolean } | null>(null);
+  const [submitted, setSubmitted] = useState<{ name: string; area: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -20,6 +21,26 @@ export function AddVenueDialog() {
   const [capacity, setCapacity] = useState("60");
   const [note, setNote] = useState("");
   const [address, setAddress] = useState("");
+  const user = useUser();
+
+  // Resume after sign-in: reopen the form, with anything typed before.
+  useEffect(() => {
+    if (!user) return;
+    const intent = takeIntent("add-venue");
+    if (!intent) return;
+    const d = intent.draft ?? {};
+    if (d.name) setName(d.name);
+    if (d.address) setAddress(d.address);
+    if (d.area && AREAS.includes(d.area)) setArea(d.area);
+    if (d.capacity) setCapacity(d.capacity);
+    if (d.note) setNote(d.note);
+    setOpen(true);
+  }, [user]);
+
+  async function start() {
+    if (await currentUserId()) setOpen(true);
+    else requestSignIn({ type: "add-venue" });
+  }
 
   function close() {
     setOpen(false);
@@ -39,15 +60,22 @@ export function AddVenueDialog() {
     setError(null);
     const res = await addVenue({ name: name.trim(), address: address.trim(), area, capacity: Number(capacity) || null, note: note.trim() });
     setBusy(false);
-    if (!res.ok) return setError(res.error);
-    setSubmitted({ name: name.trim(), area, local: res.local });
+    if (!res.ok) {
+      if (res.signIn) {
+        setOpen(false);
+        requestSignIn({ type: "add-venue", draft: { name, address, area, capacity, note } });
+        return;
+      }
+      return setError(res.error);
+    }
+    setSubmitted({ name: name.trim(), area });
   }
 
   return (
     <>
       <Button
         variant="outline"
-        onClick={() => setOpen(true)}
+        onClick={() => void start()}
         className="h-10 gap-2 rounded-xl border-[#e8e7ed] px-3.5 font-medium text-[#30303a] shadow-none"
       >
         <Plus className="h-4 w-4" />
@@ -93,13 +121,12 @@ export function AddVenueDialog() {
                       <p className="mt-1 text-sm leading-6 text-[#5f6b64]">
                         It stays off the public map until 2 trusted organisers vouch for it.
                       </p>
-                      {submitted.local ? <p className="mt-1 text-sm leading-6 text-[#a86a10]">You look offline, so it's saved on this device only for now.</p> : null}
                     </div>
                   </div>
                   <div className="flex items-start gap-3 rounded-2xl bg-[#faf9ff] p-4">
                     <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#7854f6]" />
                     <p className="text-sm leading-6 text-[#5f5d6a]">
-                      Vouches come from organisers who have hosted there. Everyone sees the same review queue, and each browser can vote once.
+                      Vouches come from organisers who have hosted there. Everyone sees the same review queue, and each signed-in person can vote once.
                     </p>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-[#6f6d78]">

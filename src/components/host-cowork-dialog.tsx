@@ -6,19 +6,35 @@ import { AnimatePresence, motion } from "motion/react";
 import { CheckCircle2, Plus, ShieldCheck, X } from "lucide-react";
 import { LONDON_AREAS } from "@/lib/areas";
 import { DAY_LABEL, WEEK, type DayKey } from "@/lib/hours";
+import { currentUserId, requestSignIn, takeIntent, useUser } from "@/lib/auth";
 import { addSession, VOUCHES_NEEDED } from "@/lib/pending-sessions";
 
 const field = "mt-1.5 h-11 w-full rounded-xl border border-[#e7e5ed] bg-white px-3 font-normal outline-none focus:border-[#b9a7fb] focus:ring-2 focus:ring-[#7854f6]/10";
 
 export function HostCoworkDialog() {
   const [open, setOpen] = useState(false);
-  const [done, setDone] = useState<{ title: string; local?: boolean } | null>(null);
+  const [done, setDone] = useState<{ title: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const [f, setF] = useState({ title: "", organiser: "", venue_name: "", address: "", area: LONDON_AREAS[0].name, day_of_week: "fri" as DayKey, start_time: "10:00", end_time: "17:00", price: "Free", url: "", note: "" });
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
+  const user = useUser();
+
+  // Resume after sign-in: reopen the form, with anything typed before.
+  useEffect(() => {
+    if (!user) return;
+    const intent = takeIntent("host-session");
+    if (!intent) return;
+    if (intent.draft) setF((p) => ({ ...p, ...(intent.draft as Partial<typeof p>) }));
+    setOpen(true);
+  }, [user]);
+
+  async function start() {
+    if (await currentUserId()) setOpen(true);
+    else requestSignIn({ type: "host-session" });
+  }
 
   function close() {
     setOpen(false);
@@ -36,13 +52,20 @@ export function HostCoworkDialog() {
     setError(null);
     const res = await addSession({ ...f, title: f.title.trim(), organiser: f.organiser.trim(), venue_name: f.venue_name.trim(), address: f.address.trim(), url: f.url.trim(), note: f.note.trim() });
     setBusy(false);
-    if (!res.ok) return setError(res.error);
-    setDone({ title: f.title.trim(), local: res.local });
+    if (!res.ok) {
+      if (res.signIn) {
+        setOpen(false);
+        requestSignIn({ type: "host-session", draft: f });
+        return;
+      }
+      return setError(res.error);
+    }
+    setDone({ title: f.title.trim() });
   }
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#20202a] px-3 text-xs font-semibold !text-white hover:bg-[#383845]">
+      <button type="button" onClick={() => void start()} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#20202a] px-3 text-xs font-semibold !text-white hover:bg-[#383845]">
         <Plus className="h-3.5 w-3.5" /> Host a cowork session
       </button>
       {mounted ? createPortal(<AnimatePresence>
@@ -66,7 +89,6 @@ export function HostCoworkDialog() {
                     <div>
                       <p className="font-medium">{done.title} is waiting for vouches</p>
                       <p className="mt-1 text-sm leading-6 text-[#5f6b64]">It joins "This week you can cowork with others" once {VOUCHES_NEEDED} organisers vouch for it.</p>
-                      {done.local ? <p className="mt-1 text-sm leading-6 text-[#a86a10]">You look offline, so it's saved on this device only for now.</p> : null}
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
