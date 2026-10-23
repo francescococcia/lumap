@@ -1,8 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { mentionedIn, nameRegex } from "@/lib/venue-match";
 import { AnimatePresence, motion } from "motion/react";
-import { BookOpenText, LoaderCircle, MapPin, Mic, Send, Sparkles, X } from "lucide-react";
+import { BookOpenText, LoaderCircle, Map as MapIcon, MapPin, Mic, Send, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type SpeechResult = ArrayLike<{ transcript: string }>;
@@ -43,20 +44,50 @@ function linkLabel(label: string, url: string) {
   }
 }
 
-function bold(text: string, key: string) {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
-    part.startsWith("**") && part.endsWith("**") ? <strong key={`${key}-${i}`} className="font-semibold text-[#20202a]">{part.slice(2, -2)}</strong> : part.replace(/[*_`]/g, ""),
+type Pick = (id: string) => void;
+type Ctx = { places: AskVenue[]; onPick: Pick; used?: Set<string> };
+
+/** Venue names in plain text become buttons that open the venue on the map. */
+function withNames(text: string, key: string, ctx: Ctx): React.ReactNode[] {
+  const res = ctx.places.map((p) => nameRegex(p.name, "")?.source).filter(Boolean);
+  if (!res.length || !text) return [text];
+  const re = new RegExp(res.join("|"), "giu");
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  for (const m of text.matchAll(re)) {
+    const at = m.index ?? 0;
+    const place = ctx.places.find((p) => nameRegex(p.name)?.test(m[0]));
+    // Only the first mention of each place in a line is a button.
+    if (!place || ctx.used?.has(place.id)) continue;
+    ctx.used?.add(place.id);
+    out.push(text.slice(last, at));
+    out.push(
+      <button key={`${key}-n${at}`} type="button" onClick={() => ctx.onPick(place.id)} title="Show on map" className="font-semibold text-[#5a3fd6] underline decoration-[#cfc4fb] decoration-dotted underline-offset-4 hover:decoration-[#7854f6]">
+        {m[0]}
+      </button>,
+    );
+    last = at + m[0].length;
+  }
+  out.push(text.slice(last));
+  return out;
+}
+
+function bold(text: string, key: string, ctx: Ctx) {
+  return text.split(/(\*\*[^*]+\*\*)/g).flatMap((part, i) =>
+    part.startsWith("**") && part.endsWith("**")
+      ? [<strong key={`${key}-${i}`} className="font-semibold text-[#20202a]">{withNames(part.slice(2, -2), `${key}-${i}`, ctx)}</strong>]
+      : withNames(part.replace(/[*_`]/g, ""), `${key}-${i}`, ctx),
   );
 }
 
 // Bold plus [label](url) and bare URLs as new-tab links.
-function inline(raw: string) {
+function inline(raw: string, ctx: Ctx) {
   const text = raw.replace(/<(https?:\/\/[^>\s]+)>/g, "$1");
   const out: React.ReactNode[] = [];
   let last = 0;
   for (const m of text.matchAll(LINK_RE)) {
     const at = m.index ?? 0;
-    out.push(...bold(text.slice(last, at), `t${at}`));
+    out.push(...bold(text.slice(last, at), `t${at}`, ctx));
     const url = m[2] ?? m[3];
     out.push(
       <a key={`a${at}`} href={url} target="_blank" rel="noopener noreferrer" className="font-medium !text-[#7854f6] !underline decoration-[#cfc4fb] underline-offset-2 hover:decoration-[#7854f6]">
@@ -65,34 +96,47 @@ function inline(raw: string) {
     );
     last = at + m[0].length;
   }
-  out.push(...bold(text.slice(last), "end"));
+  out.push(...bold(text.slice(last), "end", ctx));
   return out;
 }
 
-function Answer({ text }: { text: string }) {
+function MapChip({ place, onPick }: { place: AskVenue; onPick: Pick }) {
+  return (
+    <button type="button" onClick={() => onPick(place.id)} aria-label={`Show ${place.name} on map`} className="ml-1.5 inline-flex translate-y-[-1px] items-center gap-1 rounded-full bg-[#f0ebff] px-2.5 py-0.5 align-middle text-[12px] font-semibold leading-5 text-[#5a3fd6] transition-colors hover:bg-[#7854f6] hover:!text-white">
+      <MapPin className="h-3 w-3" aria-hidden="true" /> Show on map
+    </button>
+  );
+}
+
+function Answer({ text, places, onPick }: { text: string; places: AskVenue[]; onPick: Pick }) {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const ctx = { places, onPick };
   return (
     <div className="space-y-3 text-[16px] leading-[1.8] text-[#34323d]">
       {lines.map((line, i) => (
         <motion.div key={i} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i * 0.06, 0.9), duration: 0.35, ease: "easeOut" }}>
-          {renderLine(line, i)}
+          {renderLine(line, i, ctx)}
         </motion.div>
       ))}
     </div>
   );
 }
 
-function renderLine(line: string, i: number) {
-        if (/^\|?\s*:?-{3,}/.test(line)) return null;
-        if (line.startsWith("|")) {
-          const cells = line.split("|").map((c) => c.trim()).filter(Boolean);
-          return <p key={i} className="flex gap-2 pl-1"><span className="mt-[11px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#7854f6]" /><span>{inline(cells.join(" · "))}</span></p>;
-        }
-        const heading = /^#{1,6}\s+/.exec(line);
-        if (heading) return <p key={i} className="pt-1 font-semibold text-[#20202a]">{inline(line.slice(heading[0].length))}</p>;
-        const bullet = /^(?:[-*\u2022]|\d+[.)])\s+/.exec(line);
-        if (bullet) return <p key={i} className="flex gap-2 pl-1"><span className="mt-[11px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#7854f6]" />{<span>{inline(line.slice(bullet[0].length))}</span>}</p>;
-        return <p key={i}>{inline(line)}</p>;
+function renderLine(line: string, i: number, shared: Ctx) {
+  const ctx = { ...shared, used: new Set<string>() };
+  if (/^\|?\s*:?-{3,}/.test(line)) return null;
+  const place = mentionedIn(line.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1"), ctx.places)[0];
+  const chip = place ? <MapChip place={place} onPick={ctx.onPick} /> : null;
+  const dot = <span className="mt-[11px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#7854f6]" />;
+  if (line.startsWith("|")) {
+    const cells = line.split("|").map((c) => c.trim()).filter(Boolean);
+    return <p key={i} className="flex gap-2 pl-1">{dot}<span>{inline(cells.join(" · "), ctx)}{chip}</span></p>;
+  }
+  const heading = /^#{1,6}\s+/.exec(line);
+  if (heading) return <p key={i} className="pt-1 font-semibold text-[#20202a]">{inline(line.slice(heading[0].length), ctx)}{chip}</p>;
+  const bullet = /^(?:[-*\u2022]|\d+[.)])\s+/.exec(line);
+  if (bullet) return <p key={i} className="flex gap-2 pl-1">{dot}<span>{inline(line.slice(bullet[0].length), ctx)}{chip}</span></p>;
+  return <p key={i}>{inline(line, ctx)}{chip}</p>;
 }
 
 function cleanSources(sources: string[]) {
@@ -110,16 +154,17 @@ function cleanSources(sources: string[]) {
 export type AskVenue = {
   id: string;
   name: string;
-  address: string;
+  address: string | null;
   lat: number;
   lng: number;
   capacity: number | null;
-  status: string;
-  reason: string;
-  distance_m: null;
+  status: string | null;
+  reason: string | null;
+  distance_m: number | null;
+  [key: string]: unknown;
 };
 
-type Turn = { q: string; answer: string | null; sources: string[]; error?: string; venues: AskVenue[] };
+type Turn = { id: number; q: string; answer: string | null; sources: string[]; error?: string; venues: AskVenue[]; pending?: boolean };
 
 const POSTCODE = /\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i;
 
@@ -163,7 +208,7 @@ async function extractVenues(answer: string): Promise<AskVenue[]> {
     if (!found.some((f) => f.name === name)) found.push({ name: name.trim(), address: address.trim(), postcode: pc[1].toUpperCase(), details });
   });
   const geo = await Promise.all(
-    found.slice(0, 8).map(async (v) => {
+    found.slice(0, 8).map(async (v): Promise<AskVenue | null> => {
       try {
         const r = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(v.postcode.replace(/\s+/g, ""))}`);
         const j = (await r.json()) as { result?: { latitude: number; longitude: number } };
@@ -178,9 +223,9 @@ async function extractVenues(answer: string): Promise<AskVenue[]> {
           lng: j.result.longitude,
           capacity: cap ? Number(cap[1]) : null,
           status: "suggested",
-          reason: detail ? `Suggested by Ask Lumap · ${detail}` : "Suggested by Ask Lumap from community memory",
+          reason: detail ? `Suggested by Ask Lumap · ${detail}` : "Suggested by Ask Lumap",
           distance_m: null,
-        } satisfies AskVenue;
+        };
       } catch {
         return null;
       }
@@ -191,11 +236,40 @@ async function extractVenues(answer: string): Promise<AskVenue[]> {
 
 export const ASK_VENUES_EVENT = "lumap:ask-venues";
 export const FOCUS_VENUE_EVENT = "lumap:focus-venue";
+export const FIT_VENUES_EVENT = "lumap:fit-venues";
 
-function showOnMap(venues: AskVenue[], focusId?: string) {
+/** Pins the venues; then opens one (focusId) or frames them all. */
+function showOnMap(venues: AskVenue[], focusId?: string | null, fitIds?: string[]) {
   window.dispatchEvent(new CustomEvent(ASK_VENUES_EVENT, { detail: venues }));
-  const id = focusId ?? venues[0]?.id;
-  if (id) setTimeout(() => window.dispatchEvent(new CustomEvent(FOCUS_VENUE_EVENT, { detail: id })), 50);
+  setTimeout(() => {
+    if (focusId) window.dispatchEvent(new CustomEvent(FOCUS_VENUE_EVENT, { detail: focusId }));
+    else if (fitIds?.length) window.dispatchEvent(new CustomEvent(FIT_VENUES_EVENT, { detail: fitIds }));
+  }, 60);
+}
+
+const EXAMPLES = [
+  "I need a coworking space for next week",
+  "A birthday for 30 people on Saturday",
+  "A meetup for 60 near Old Street on a Thursday",
+  "Somewhere to work alongside other founders tomorrow",
+];
+
+type AskReply = AskResponse & { places?: AskVenue[] };
+
+async function postAsk(payload: Record<string, unknown>): Promise<{ ok: boolean; data: AskReply }> {
+  const res = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+  const data = (await res.json().catch(() => ({ answer: null, sources: [] }))) as AskReply;
+  return { ok: res.ok, data };
+}
+
+/** Places from the server (known venues) plus any other postcodes in the text, geocoded. */
+async function placesFor(data: AskReply, earlier: AskVenue[]): Promise<AskVenue[]> {
+  const known = data.places ?? [];
+  const answer = data.answer ?? "";
+  const extra = answer ? (await extractVenues(answer)).filter((v) => !known.some((k) => k.name.toLowerCase() === v.name.toLowerCase() || mentionedIn(v.name, [k]).length)) : [];
+  const out = [...known, ...extra];
+  if (!out.length) return earlier.filter((v) => answer.toLowerCase().includes(v.name.toLowerCase()));
+  return out;
 }
 
 export function AskPanel() {
@@ -267,48 +341,86 @@ export function AskPanel() {
     }
   }
 
-  async function submitQuestion(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const prompt = question.trim();
-    if (!prompt || loading) return;
+  const turnSeq = useRef(0);
+  const turnsRef = useRef<Turn[]>([]);
+  useEffect(() => {
+    turnsRef.current = turns;
+  }, [turns]);
 
+  const pick = (id: string) => {
+    const all = turnsRef.current.flatMap((t) => t.venues);
+    const unique = all.filter((v, i) => all.findIndex((x) => x.id === v.id) === i);
+    showOnMap(unique, id);
+  };
+
+  function pinTurn(venues: AskVenue[]) {
+    if (!venues.length) return;
+    const earlier = turnsRef.current.flatMap((t) => t.venues).filter((e) => !venues.some((v) => v.id === e.id));
+    showOnMap([...venues, ...earlier], null, venues.map((v) => v.id));
+  }
+
+  // Two requests at once: an instant answer from what Lumap already knows, and the slower
+  // community-memory answer, which replaces it when it arrives with places of its own.
+  async function ask(prompt: string) {
+    if (!prompt || loading) return;
     setLoading(true);
     setError("");
     setQuestion("");
-    const history = turns
+    const id = ++turnSeq.current;
+    const past = turnsRef.current;
+    const history = past
       .filter((t) => t.answer)
       .slice(-2)
       .map((t) => `Q: ${t.q}\nA: ${(t.answer ?? "").slice(0, 700)}`)
       .join("\n\n");
     const full = history ? `Earlier in this conversation:\n${history}\n\nFollow-up question: ${prompt}` : prompt;
-    try {
-      let result = await fetch("/api/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: full }),
-      });
-      if (result.status === 503) {
-        result = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: full }) });
-      }
-      const data = (await result.json()) as AskResponse;
-      if (!result.ok) {
-        setTurns((t) => [...t, { q: prompt, answer: null, sources: [], venues: [], error: data.error ?? "Lumap could not answer just now. Please try again." }]);
-      } else {
-        let venues = data.answer ? await extractVenues(data.answer) : [];
-        const earlier = turns.flatMap((t) => t.venues);
-        const mentioned = earlier.filter((v) => (data.answer ?? "").toLowerCase().includes(v.name.toLowerCase()));
-        if (!venues.length && mentioned.length) venues = mentioned;
-        setTurns((t) => [...t, { q: prompt, answer: data.answer, sources: data.sources ?? [], venues }]);
-        if (venues.length) {
-          const all = [...venues, ...earlier.filter((e) => !venues.some((v) => v.id === e.id))];
-          showOnMap(all, (mentioned[0] ?? venues[0]).id);
+    const payload = { question: full, latest: prompt, previous: past.map((t) => t.q) };
+    const earlier = past.flatMap((t) => t.venues);
+    let shown = false;
+    let settled = false;
+    const update = (patch: Partial<Turn>) => setTurns((ts) => ts.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+
+    const quick = postAsk({ ...payload, mode: "quick" })
+      .then(async ({ ok, data }) => {
+        if (!ok || !data.answer || settled) return;
+        const venues = await placesFor(data, earlier);
+        if (settled) return;
+        shown = true;
+        setTurns((ts) => [...ts, { id, q: prompt, answer: data.answer, sources: [], venues, pending: true }]);
+        setLoading(false);
+        pinTurn(venues);
+      })
+      .catch(() => undefined);
+
+    const memory = postAsk({ ...payload, mode: "memory" })
+      .then(async ({ ok, data }) => {
+        const venues = ok && data.answer ? await placesFor(data, earlier) : [];
+        await quick;
+        settled = true;
+        if (ok && data.answer && (venues.length || !shown)) {
+          if (shown) update({ answer: data.answer, sources: data.sources ?? [], venues, pending: false });
+          else setTurns((ts) => [...ts, { id, q: prompt, answer: data.answer, sources: data.sources ?? [], venues }]);
+          pinTurn(venues);
+        } else if (shown) {
+          update({ pending: false });
+        } else {
+          setTurns((ts) => [...ts, { id, q: prompt, answer: null, sources: [], venues: [], error: data.error ?? "I couldn't come up with an answer just now. Try adding an area, a date or how many people?" }]);
         }
-      }
-    } catch {
-      setTurns((t) => [...t, { q: prompt, answer: null, sources: [], venues: [], error: "Could not reach Lumap. Check your connection and try again." }]);
-    } finally {
-      setLoading(false);
-    }
+      })
+      .catch(async () => {
+        await quick;
+        settled = true;
+        if (shown) update({ pending: false });
+        else setTurns((ts) => [...ts, { id, q: prompt, answer: null, sources: [], venues: [], error: "I can't reach Lumap right now. Check your connection and try again." }]);
+      });
+
+    await Promise.race([quick.then(() => (shown ? undefined : memory)), memory]);
+    setLoading(false);
+  }
+
+  function submitQuestion(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void ask(question.trim());
   }
 
   return (
@@ -351,57 +463,66 @@ export function AskPanel() {
               <Sparkles className="h-5 w-5" aria-hidden="true" />
             </span>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8473c2]">Lumap community memory</p>
-              <h2 className="mt-1 text-xl font-semibold tracking-[-0.03em]">Ask the city</h2>
+              <h2 className="text-xl font-semibold tracking-[-0.03em]">Ask Lumap</h2>
+              <p className="mt-0.5 text-sm text-[#6f6d78]">Tell me what you&apos;re planning and I&apos;ll find you a spot</p>
             </div>
           </div>
 
           {turns.length === 0 ? (
-            <p className="mb-4 text-sm leading-6 text-[#6f6d78]">
-              Ask about the venues, communities, and events organisers have shared. Venues in the answer drop onto the map, and you can keep asking follow-ups.
-            </p>
+            <div className="mb-2">
+              <p className="mb-3 text-[15px] leading-6 text-[#4a4853]">
+                Hi! I know the London spaces organisers actually use: coworking days, rooms for meetups, places for a party. Try one of these, or ask in your own words.
+              </p>
+              <div className="flex flex-col items-start gap-2">
+                {EXAMPLES.map((ex) => (
+                  <button key={ex} type="button" onClick={() => void ask(ex)} disabled={loading} className="rounded-2xl border border-[#e4ddfc] bg-[#faf9ff] px-3.5 py-2 text-left text-[14px] leading-5 text-[#4b3aa8] transition-colors hover:border-[#7854f6] hover:bg-[#f0ebff] disabled:opacity-60">
+                    {ex}
+                  </button>
+                ))}
+              </div>
+            </div>
           ) : (
-            <button type="button" onClick={() => { setTurns([]); setError(""); }} className="mb-3 self-start text-xs font-medium text-[#7854f6] hover:underline">New conversation</button>
+            <button type="button" onClick={() => { setTurns([]); setError(""); }} className="mb-3 self-start text-xs font-medium text-[#7854f6] hover:underline">Start over</button>
           )}
 
           <div aria-live="polite" className="space-y-5">
-            {turns.map((turn, ti) => (
-              <motion.div key={ti} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+            {turns.map((turn) => (
+              <motion.div key={turn.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
                 <div className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-[#7854f6] px-4 py-2.5 text-[15px] leading-6 text-white">{turn.q}</div>
                 {turn.error ? (
                   <p role="alert" className="rounded-xl border border-[#f2d6d3] bg-[#fff8f7] px-4 py-3 text-sm text-[#9e4038]">{turn.error}</p>
                 ) : turn.answer ? (
                   <div className="rounded-2xl rounded-bl-md bg-[#faf9ff] p-5">
-                    <Answer text={turn.answer} />
+                    <Answer text={turn.answer} places={turn.venues} onPick={pick} />
+                    {turn.pending ? (
+                      <p className="mt-3 flex items-center gap-2 text-xs text-[#8a8894]">
+                        <LoaderCircle className="h-3.5 w-3.5 animate-spin text-[#b9a7fb]" aria-hidden="true" /> Checking what other organisers have shared…
+                      </p>
+                    ) : null}
                   </div>
                 ) : (
-                  <p className="rounded-2xl bg-[#faf9ff] p-5 text-sm leading-6 text-[#6f6d78]">I couldn’t find an answer in the shared community memory.</p>
+                  <p className="rounded-2xl bg-[#faf9ff] p-5 text-sm leading-6 text-[#6f6d78]">I couldn&apos;t find anything for that one. Try adding an area, a date or how many people?</p>
                 )}
-                {turn.venues.length ? (
-                  <div className="rounded-2xl border border-[#e4ddfc] p-3">
-                    <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#8473c2]"><MapPin className="h-3.5 w-3.5" /> On the map</p>
-                    <div className="flex flex-wrap gap-2">
-                      {turn.venues.map((v) => (
-                        <button key={v.id} type="button" onClick={() => showOnMap(turn.venues, v.id)} className="inline-flex items-center gap-1.5 rounded-full bg-[#f4f0ff] px-3 py-1.5 text-[13px] font-medium text-[#5a3fd6] transition-colors hover:bg-[#7854f6] hover:!text-white">
-                          <MapPin className="h-3.5 w-3.5" /> {v.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                {turn.venues.length > 1 ? (
+                  <button type="button" onClick={() => showOnMap(turn.venues, null, turn.venues.map((v) => v.id))} className="inline-flex items-center gap-1.5 rounded-full bg-[#7854f6] px-3.5 py-1.5 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-[#6842eb]">
+                    <MapIcon className="h-3.5 w-3.5" aria-hidden="true" /> Show all {turn.venues.length} on map
+                  </button>
                 ) : null}
                 {cleanSources(turn.sources).length ? (
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <BookOpenText className="h-3.5 w-3.5 text-[#9a98a3]" aria-hidden="true" />
-                    {cleanSources(turn.sources).map((s, i) => (
-                      <span key={i} className="rounded-full border border-[#ecebf0] px-2.5 py-1 text-xs text-[#6f6d78]">{s}</span>
-                    ))}
-                  </div>
+                  <details className="text-xs text-[#8a8894]">
+                    <summary className="flex cursor-pointer list-none items-center gap-1.5 hover:text-[#5a3fd6]"><BookOpenText className="h-3.5 w-3.5" aria-hidden="true" /> Where this comes from</summary>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {cleanSources(turn.sources).map((src, i) => (
+                        <span key={i} className="rounded-full border border-[#ecebf0] px-2.5 py-1 text-xs text-[#6f6d78]">{src}</span>
+                      ))}
+                    </div>
+                  </details>
                 ) : null}
               </motion.div>
             ))}
             {loading ? (
               <div className="flex items-center gap-2 rounded-2xl bg-[#faf9ff] p-4 text-sm text-[#6f6d78]">
-                <LoaderCircle className="h-4 w-4 animate-spin text-[#7854f6]" /> Searching community memory…
+                <LoaderCircle className="h-4 w-4 animate-spin text-[#7854f6]" /> Having a look around…
               </div>
             ) : null}
             <div ref={endRef} />
@@ -420,13 +541,13 @@ export function AskPanel() {
                 id="question"
                 value={question}
                 onChange={(event) => setQuestion(event.target.value)}
-                placeholder={turns.length ? "Ask a follow-up, e.g. which is closest to Liverpool Street?" : "I need a room for 80 people on Saturday near Old Street"}
+                placeholder={turns.length ? "Anything else? e.g. something closer to Liverpool Street" : "e.g. a room for 80 people on Saturday near Old Street"}
                 rows={turns.length ? 2 : 3}
                 maxLength={1000}
                 className="min-h-20 w-full resize-y bg-transparent px-2 py-1 text-base leading-7 text-[#30303a] outline-none placeholder:text-[#a3a1aa]"
               />
               <div className="flex items-center justify-between border-t border-[#efedf2] pt-3">
-                <span className="px-2 text-xs text-[#92909b]">Answers are grounded in shared community context.</span>
+                <span className="px-2 text-xs text-[#92909b]">I only suggest places I actually know about.</span>
                 <div className="flex items-center gap-2">
                   {speechSupported && (
                     <Button
