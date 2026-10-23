@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Maximize2, Sparkles, ExternalLink, Laptop, PartyPopper, Presentation, AlertCircle, CalendarDays, CheckCircle2, Lock, Mail, Clock, MapPin as MapPinIcon, Navigation, Search, ShieldCheck, Users, X } from "lucide-react";
+import { Maximize2, Sparkles, ExternalLink, Laptop, PartyPopper, Presentation, CalendarDays, Clock, MapPin as MapPinIcon, Navigation, Search, ShieldCheck, Users, X } from "lucide-react";
 import { FancySelect, Stepper } from "@/components/ui/fancy-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +22,8 @@ import { DAY_LABEL, WEEK, dayWindow, hoursFit, type DayKey, type Hours, type Hou
 import { addDays, dateLabel, isoToLocalDate, localDateToIso, londonToday, nextWeekday, quickDates, sessionOnDate, weekdayOf } from "@/lib/dates";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { OrganiserDetails } from "@/components/organiser-details";
+import { takeIntent } from "@/lib/auth";
 import { IN_LONDON, distanceText, fromText, lookupPostcode, metresBetween, walkText, type Origin } from "@/lib/geo";
 
 export type VenueHit = {
@@ -186,8 +188,14 @@ export function VenueHome() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [fitKey, setFitKey] = useState(0);
-  const [vouched, setVouched] = useState<Record<string, boolean>>({});
-  const [requested, setRequested] = useState<Record<string, boolean>>({});
+  // Resume "vouch" / "share details" for a venue after the sign-in round trip.
+  const [resumed, setResumed] = useState<{ venue: VenueHit; action: "vouch" | "report" | null } | null>(null);
+  useEffect(() => {
+    const intent = takeIntent("venue-report");
+    if (!intent) return;
+    setResumed({ venue: { ...intent.venue, reason: null, distance_m: null } as VenueHit, action: intent.action });
+    setSelectedId(intent.venue.id);
+  }, []);
 
   // Events-feed events on the chosen date.
   const [dayEvents, setDayEvents] = useState<DayEvent[] | null>(null);
@@ -395,8 +403,9 @@ export function VenueHome() {
     const seen = new Set<string>();
     const need = Number(capacity) || 0;
     const fits = (v: VenueHit) => v.capacity == null || v.capacity >= need;
-    return [...askVenues, ...localVenues.filter(fits), ...results.filter(fits)].filter((v) => (seen.has(v.id) ? false : (seen.add(v.id), true)));
-  }, [askVenues, localVenues, results, capacity]);
+    return [...askVenues, ...localVenues.filter(fits), ...results.filter(fits), ...(resumed ? [resumed.venue] : [])].filter((v) => (seen.has(v.id) ? false : (seen.add(v.id), true)));
+  }, [askVenues, localVenues, results, capacity, resumed]);
+  const localIds = useMemo(() => new Set(localVenues.map((v) => v.id)), [localVenues]);
 
   const fitById = useMemo(() => {
     const map: Record<string, HoursFit> = {};
@@ -847,31 +856,15 @@ export function VenueHome() {
                   </p>
                 ) : null}
               </div>
-              <div className="rounded-2xl border border-[#f3e3c3] bg-[#fffaf0] p-4">
-                <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#a86a10]">
-                  <AlertCircle className="h-3.5 w-3.5" /> Still missing for organisers
-                </p>
-                <ul className="grid gap-1.5 text-sm text-[#5f5640]">
-                  <li className="flex items-center gap-2"><Lock className="h-3.5 w-3.5 text-[#a86a10]" /> Booking contact, shared only with vouched organisers</li>
-                  <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-[#e3b25a]" /> Price per evening</li>
-                  <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-[#e3b25a]" /> Step-free access and toilets</li>
-                  <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-[#e3b25a]" /> Projector, mics and wifi</li>
-                </ul>
-                <button
-                  type="button"
-                  onClick={() => setRequested((r) => ({ ...r, [selected.id]: true }))}
-                  disabled={requested[selected.id]}
-                  className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#ecd7ad] bg-white text-sm font-medium text-[#6b4a0c] transition-colors hover:bg-[#fff4de] disabled:cursor-default disabled:border-[#cfe9db] disabled:bg-[#f3fbf6] disabled:text-[#1f7a52]"
-                >
-                  {requested[selected.id] ? <><CheckCircle2 className="h-4 w-4" /> Asked the vouching organisers</> : <><Mail className="h-4 w-4" /> Request contact and details</>}
-                </button>
-              </div>
-              <Button
-                onClick={() => setVouched((v) => ({ ...v, [selected.id]: !v[selected.id] }))}
-                className={`h-11 rounded-xl ${vouched[selected.id] ? "bg-[#e6f7ef] text-[#1f7a52] hover:bg-[#d9f2e6]" : "bg-[#7854f6] text-white hover:bg-[#6842eb]"}`}
-              >
-                {vouched[selected.id] ? <><CheckCircle2 className="mr-2 h-4 w-4" />You vouched for this venue</> : <><ShieldCheck className="mr-2 h-4 w-4" />I've hosted here, vouch</>}
-              </Button>
+              {selected.status !== "suggested" && !localIds.has(selected.id) ? (
+                <OrganiserDetails
+                  venue={{ id: selected.id, name: selected.name, address: selected.address, lat: Number(selected.lat), lng: Number(selected.lng), capacity: selected.capacity, status: selected.status }}
+                  autoAction={resumed?.venue.id === selected.id ? resumed.action : null}
+                  onAutoActionDone={() => setResumed((r) => (r ? { ...r, action: null } : r))}
+                />
+              ) : (
+                <p className="rounded-2xl border border-dashed border-[#e4ddfc] bg-[#faf9ff] p-3 text-xs text-[#6f6d78]">Organiser details appear once this place is on the map as a venue (add it with Add venue).</p>
+              )}
             </div>
           </motion.aside>
         ) : null}

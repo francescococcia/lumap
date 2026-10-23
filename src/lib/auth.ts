@@ -14,7 +14,10 @@ const INTENT_TTL_MS = 60 * 60 * 1000;
 export type Intent =
   | { type: "add-venue"; draft?: Record<string, string> }
   | { type: "host-session"; draft?: Record<string, string> }
-  | { type: "vote"; id: string; kind: "venue" | "session"; vote: "vouch" | "reject" };
+  | { type: "vote"; id: string; kind: "venue" | "session"; vote: "vouch" | "reject" }
+  // From the venue panel: "Vouch, I've hosted here" or "Share what it's like". The venue is kept so
+  // the panel can reopen on it after the magic-link round trip.
+  | { type: "venue-report"; action: "vouch" | "report"; venue: { id: string; name: string; address: string | null; lat: number; lng: number; capacity: number | null; status: string | null } };
 
 let current: User | null = null;
 let ready = false;
