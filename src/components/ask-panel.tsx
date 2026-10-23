@@ -125,7 +125,10 @@ function Answer({ text, places, onPick }: { text: string; places: AskVenue[]; on
 function renderLine(line: string, i: number, shared: Ctx) {
   const ctx = { ...shared, used: new Set<string>() };
   if (/^\|?\s*:?-{3,}/.test(line)) return null;
-  const place = mentionedIn(line.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1"), ctx.places)[0];
+  // A line can name the venue or only its session ("Co-Working Fridays"); both get a Show on map chip.
+  const plain = line.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
+  const named = ctx.places.flatMap((p) => [p.name, ...(Array.isArray(p.aliases) ? (p.aliases as string[]) : [])].map((name) => ({ name, p })));
+  const place = mentionedIn(plain, named)[0]?.p;
   const chip = place ? <MapChip place={place} onPick={ctx.onPick} /> : null;
   const dot = <span className="mt-[11px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#7854f6]" />;
   if (line.startsWith("|")) {
