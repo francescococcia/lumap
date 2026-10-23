@@ -1,6 +1,7 @@
 import { CalendarDays, ChevronDown, MapPin } from "lucide-react";
 import { AddVenueDialog } from "@/components/add-venue-dialog";
 import { AskPanel } from "@/components/ask-panel";
+import { AuthMenu } from "@/components/auth-menu";
 import { Button } from "@/components/ui/button";
 import { VenueHome } from "@/components/venue-home";
 
@@ -27,6 +28,7 @@ export default function Home() {
         </nav>
         <div className="flex items-center gap-3">
           <AddVenueDialog />
+          <AuthMenu />
         </div>
       </header>
       <VenueHome />
