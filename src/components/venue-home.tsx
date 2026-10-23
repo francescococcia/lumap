@@ -22,6 +22,7 @@ import { DAY_LABEL, WEEK, dayWindow, hoursFit, type DayKey, type Hours, type Hou
 import { addDays, dateLabel, isoToLocalDate, localDateToIso, londonToday, nextWeekday, quickDates, sessionOnDate, weekdayOf } from "@/lib/dates";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { IN_LONDON, distanceText, fromText, lookupPostcode, metresBetween, walkText, type Origin } from "@/lib/geo";
 
 export type VenueHit = {
   id: string;
@@ -76,6 +77,50 @@ export function VenueHome() {
   const [time, setTime] = useState("19:00");
   const [endTime, setEndTime] = useState("22:00");
   const [confirmedOnly, setConfirmedOnly] = useState(false);
+  // Where distances are measured from: the area centre unless the user sets their own point.
+  const [customOrigin, setCustomOrigin] = useState<Origin | null>(null);
+  const [fromMode, setFromMode] = useState<Origin["kind"] | "postcode-input">("area");
+  const [picking, setPicking] = useState(false);
+  const [postcode, setPostcode] = useState("");
+  const [fromNote, setFromNote] = useState<string | null>(null);
+  const areaObj = LONDON_AREAS.find((a) => a.name === areaName);
+  const origin: Origin | null = customOrigin ?? (areaObj ? { kind: "area", lat: areaObj.lat, lng: areaObj.lng, label: areaObj.name } : null);
+  function pickAreaCentre() {
+    setCustomOrigin(null);
+    setFromMode("area");
+    setPicking(false);
+    setFromNote(null);
+  }
+  const originSearch = useRef(false);
+  function setOriginAndSearch(o: Origin) {
+    setFromNote(IN_LONDON(o) ? null : "That point is outside London, so few venues will be in range.");
+    originSearch.current = true;
+    setCustomOrigin(o);
+    setFromMode(o.kind);
+    setPicking(false);
+  }
+  function pickMyLocation() {
+    setFromMode("me");
+    setPicking(false);
+    if (!("geolocation" in navigator)) return setFromNote("Your browser can't share a location.");
+    setFromNote("Finding you…");
+    navigator.geolocation.getCurrentPosition(
+      (p) => setOriginAndSearch({ kind: "me", lat: p.coords.latitude, lng: p.coords.longitude, label: "you" }),
+      () => {
+        setFromNote("Location blocked or unavailable. Try a postcode instead.");
+        setFromMode(customOrigin?.kind ?? "area");
+      },
+      { timeout: 10000, maximumAge: 300000 },
+    );
+  }
+  async function pickPostcode(event?: React.FormEvent) {
+    event?.preventDefault();
+    if (!postcode.trim()) return;
+    setFromNote("Looking up postcode…");
+    const r = await lookupPostcode(postcode);
+    if ("error" in r) return setFromNote(r.error);
+    setOriginAndSearch(r);
+  }
 
   function pickUseCase(id: UseCaseId) {
     const next = USE_CASES.find((u) => u.id === id);
@@ -103,6 +148,8 @@ export function VenueHome() {
     showSearch.current = s.area;
     setUseCaseId("cowork");
     setAreaName(s.area);
+    setCustomOrigin(null);
+    setFromMode("area");
     setDateState(nextWeekday(londonToday(), s.day_of_week));
     setTime(s.start_time);
     setEndTime(s.end_time);
@@ -131,7 +178,7 @@ export function VenueHome() {
     if (params.get("for") === "cowork") pickUseCase("cowork");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [center, setCenter] = useState(LONDON_CENTER);
+  const [center, setCenter] = useState<{ lat: number; lng: number }>(LONDON_CENTER);
   const [results, setResults] = useState<VenueHit[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -156,14 +203,22 @@ export function VenueHome() {
     };
   }, [date]);
 
+  useEffect(() => {
+    if (!originSearch.current || !customOrigin) return;
+    originSearch.current = false;
+    void onSubmit(undefined, undefined, customOrigin);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customOrigin]);
+
   const [areaSuggestions, setAreaSuggestions] = useState<{ name: string; count: number; vouched: number; maxCap: number | null; sessions: number }[]>([]);
 
-  async function onSubmit(event?: React.FormEvent, overrideArea?: string) {
+  async function onSubmit(event?: React.FormEvent, overrideArea?: string, overrideOrigin?: Origin) {
     event?.preventDefault();
     const chosen = overrideArea ?? areaName;
-    if (chosen === ANY_AREA) return suggestAreas();
+    const own = overrideOrigin ?? (overrideArea ? null : customOrigin);
+    if (chosen === ANY_AREA && !own) return suggestAreas();
     setAreaSuggestions([]);
-    const area = LONDON_AREAS.find((item) => item.name === chosen) as LondonArea;
+    const area = own ?? (LONDON_AREAS.find((item) => item.name === chosen) as LondonArea);
     const minCapacity = capacity.trim() === "" ? null : Number(capacity);
     if (minCapacity !== null && (!Number.isFinite(minCapacity) || minCapacity < 0)) {
       setError("Capacity needs to be a number.");
@@ -173,7 +228,7 @@ export function VenueHome() {
     setLoading(true);
     setError(null);
     setSelectedId(null);
-    setCenter(area);
+    setCenter({ lat: area.lat, lng: area.lng });
     try {
       const supabase = getSupabase();
       const { data, error: rpcError } = await supabase.rpc("search_venues", {
@@ -349,6 +404,17 @@ export function VenueHome() {
     return map;
   }, [allResults, day, time, endTime]);
   const askIds = useMemo(() => new Set(askVenues.map((v) => v.id)), [askVenues]);
+  const distById = useMemo(() => {
+    const map: Record<string, number> = {};
+    if (!origin) return map;
+    for (const v of allResults) {
+      const lat = Number(v.lat);
+      const lng = Number(v.lng);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) map[v.id] = metresBetween(origin, { lat, lng });
+    }
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allResults, origin?.lat, origin?.lng]);
   const sessionById = useMemo(() => {
     const map: Record<string, Session> = {};
     for (const v of allResults) {
@@ -371,9 +437,9 @@ export function VenueHome() {
         return st === "covers" || (st === "unknown" && !confirmedOnly);
       })
       .map((v, i) => ({ v, i }))
-      .sort((a, b) => rank(b.v) - rank(a.v) || a.i - b.i)
+      .sort((a, b) => rank(b.v) - rank(a.v) || (distById[a.v.id] ?? Infinity) - (distById[b.v.id] ?? Infinity) || a.i - b.i)
       .map(({ v }) => v);
-  }, [allResults, fitById, askIds, sessionById, confirmedOnly, useCase, useCaseId]);
+  }, [allResults, fitById, askIds, sessionById, confirmedOnly, useCase, useCaseId, distById]);
 
   useEffect(() => {
     const target = showTarget.current;
@@ -430,7 +496,24 @@ export function VenueHome() {
 
   return (
     <div className="relative h-[calc(100vh-4rem)] min-h-[560px]">
-      <VenueMap pins={pins} center={center} selectedId={selectedId} onSelect={setSelectedId} hoveredId={hoveredId} onHover={setHoveredId} fitKey={fitKey} />
+      <VenueMap
+        pins={pins}
+        center={center}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+        hoveredId={hoveredId}
+        onHover={setHoveredId}
+        fitKey={fitKey}
+        origin={origin}
+        picking={picking}
+        onPick={(lat, lng) => setOriginAndSearch({ kind: "map", lat, lng, label: "your pin" })}
+      />
+      {picking ? (
+        <div className="absolute top-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-full bg-[#20202a] py-2 pr-2 pl-4 text-sm font-medium text-white shadow-lg">
+          Click the map where you&apos;re starting from
+          <button type="button" onClick={() => { setPicking(false); setFromMode(customOrigin?.kind ?? "area"); }} className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold hover:bg-white/25">Cancel</button>
+        </div>
+      ) : null}
       <AnimatePresence>
         {pins.length ? (
           <motion.div
@@ -505,7 +588,36 @@ export function VenueHome() {
           </div>
           <div className="grid gap-1.5 text-sm font-medium text-[#30303a]">
             <span>Area</span>
-            <FancySelect label="Area" icon={<MapPinIcon className="h-4 w-4" />} value={areaName} onChange={setAreaName} options={[{ value: ANY_AREA, label: "Anywhere, suggest an area" }, ...LONDON_AREAS.map((area) => ({ value: area.name, label: area.name }))]} />
+            <FancySelect label="Area" icon={<MapPinIcon className="h-4 w-4" />} value={areaName} onChange={(v) => { setAreaName(v); pickAreaCentre(); }} options={[{ value: ANY_AREA, label: "Anywhere, suggest an area" }, ...LONDON_AREAS.map((area) => ({ value: area.name, label: area.name }))]} />
+          </div>
+          <div className="grid gap-1.5 text-sm font-medium text-[#30303a]">
+            <span className="flex items-baseline justify-between">Distance from <span className="text-xs font-normal text-[#8a8894]">searching {SEARCH_RADIUS_M / 1000} km around it</span></span>
+            <div role="radiogroup" aria-label="Distance from" className="grid grid-cols-4 gap-1 rounded-xl bg-[#f4f3f8] p-1">
+              {([
+                { k: "area", label: "Area centre", on: pickAreaCentre },
+                { k: "me", label: "My location", on: pickMyLocation },
+                { k: "postcode", label: "Postcode", on: () => { setFromMode("postcode-input"); setPicking(false); setFromNote(null); } },
+                { k: "map", label: "On the map", on: () => { setFromMode("map"); setPicking(true); setFromNote(null); } },
+              ] as const).map((o) => {
+                const active = fromMode === o.k || (o.k === "postcode" && fromMode === "postcode-input");
+                return (
+                  <button key={o.k} type="button" role="radio" aria-checked={active} onClick={o.on} className={`h-9 rounded-lg px-1 text-[11px] leading-tight font-semibold transition-colors ${active ? "bg-white text-[#4b2fd0] shadow-[0_1px_3px_rgba(32,32,42,0.12)]" : "text-[#6f6d78] hover:text-[#20202a]"}`}>
+                    {o.label}
+                  </button>
+                );
+              })}
+            </div>
+            {fromMode === "postcode-input" ? (
+              <div className="flex gap-1.5">
+                <input aria-label="Postcode" placeholder="e.g. EC1V 9NR" className={fieldClass} value={postcode} onChange={(e) => setPostcode(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void pickPostcode(e); }} />
+                <Button type="button" onClick={() => void pickPostcode()} className="h-11 rounded-xl bg-[#20202a] px-4 text-white hover:bg-[#30303a]">Set</Button>
+              </div>
+            ) : null}
+            <p className="flex items-center gap-1.5 text-xs font-normal text-[#6f6d78]">
+              <Navigation className="h-3.5 w-3.5 text-[#2563eb]" />
+              {origin ? <>Distances from <b className="font-semibold text-[#30303a]">{origin.kind === "area" ? `${origin.label} (area centre)` : origin.kind === "me" ? "your location" : origin.kind === "postcode" ? origin.label : "your pin on the map"}</b></> : "Pick an area or a starting point to see distances"}
+            </p>
+            {fromNote ? <p className="text-xs font-normal text-[#9a6412]">{fromNote}</p> : null}
           </div>
           <div className="grid gap-1.5 text-sm font-medium text-[#30303a]">
             <span>Capacity</span>
@@ -553,7 +665,7 @@ export function VenueHome() {
               <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#8473c2]">Suggested areas</p>
               <div className="flex flex-wrap gap-1.5">
                 {areaSuggestions.map((s, i) => (
-                  <button key={s.name} type="button" onClick={() => { setAreaName(s.name); void onSubmit(undefined, s.name); }} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${i === 0 ? "bg-[#7854f6] !text-white" : "bg-white text-[#5a3fd6] ring-1 ring-[#e4ddfc] hover:bg-[#f0ebff]"}`}>
+                  <button key={s.name} type="button" onClick={() => { setAreaName(s.name); pickAreaCentre(); void onSubmit(undefined, s.name); }} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${i === 0 ? "bg-[#7854f6] !text-white" : "bg-white text-[#5a3fd6] ring-1 ring-[#e4ddfc] hover:bg-[#f0ebff]"}`}>
                     {i === 0 ? "Best: " : ""}{s.name} · {s.count} {s.count === 1 ? "room" : "rooms"}{s.sessions ? `, ${s.sessions} ${s.sessions === 1 ? "session" : "sessions"}` : s.vouched ? `, ${s.vouched} vouched` : ""}
                   </button>
                 ))}
@@ -574,6 +686,7 @@ export function VenueHome() {
                     type="button"
                     onClick={() => {
                       setAreaName(area.name);
+                      pickAreaCentre();
                       void onSubmit(undefined, area.name);
                     }}
                     className="rounded-xl bg-white px-3 py-2 text-left text-xs text-[#7a1d45] ring-1 ring-[#f3c1d4] transition-colors hover:bg-[#fff0f5]"
@@ -624,9 +737,13 @@ export function VenueHome() {
                   <p>{clean(venue.reason)}</p>
                   <p className="text-xs text-[#777580]">
                     {venue.capacity ? `Fits ${venue.capacity}` : "Capacity unknown"}
-                    {venue.distance_m != null ? ` · ${Math.round(venue.distance_m)} m` : ""}
                     {venue.status ? ` · ${venue.status}` : ""}
                   </p>
+                  {origin && distById[venue.id] != null ? (
+                    <p className="flex items-center gap-1 text-xs font-medium text-[#30303a]">
+                      <Navigation className="h-3 w-3 text-[#2563eb]" /> {fromText(distById[venue.id], origin)}
+                    </p>
+                  ) : null}
                   <VenueLinks venue={venue} compact />
                 </CardContent>
               </Card>
@@ -670,7 +787,11 @@ export function VenueHome() {
               <VenueLinks venue={selected} />
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-2xl bg-[#faf9ff] p-3"><p className="text-xs text-[#8a8894]">Capacity</p><p className="mt-0.5 flex items-center gap-1.5 font-semibold"><Users className="h-4 w-4 text-[#7854f6]" />{selected.capacity ?? "?"}</p></div>
-                <div className="rounded-2xl bg-[#faf9ff] p-3"><p className="text-xs text-[#8a8894]">Distance</p><p className="mt-0.5 flex items-center gap-1.5 font-semibold"><Navigation className="h-4 w-4 text-[#7854f6]" />{selected.distance_m != null ? `${Math.round(selected.distance_m)} m` : "?"}</p></div>
+                <div className="rounded-2xl bg-[#faf9ff] p-3">
+                  <p className="text-xs text-[#8a8894]">{origin ? `From ${origin.kind === "area" ? origin.label : origin.kind === "me" ? "you" : origin.label}` : "Distance"}</p>
+                  <p className="mt-0.5 flex items-center gap-1.5 font-semibold"><Navigation className="h-4 w-4 text-[#7854f6]" />{origin && distById[selected.id] != null ? distanceText(distById[selected.id]) : "?"}</p>
+                  {origin && distById[selected.id] != null ? <p className="text-[11px] text-[#8a8894]">about {walkText(distById[selected.id])}</p> : null}
+                </div>
               </div>
               {sessionById[selected.id] ? <HappeningHere session={sessionById[selected.id]} date={date} large /> : null}
               {venueSessions(selected).filter((s) => s !== sessionById[selected.id] && s.title !== sessionById[selected.id]?.title).length ? (

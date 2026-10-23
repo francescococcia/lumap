@@ -26,6 +26,11 @@ type VenueMapProps = {
   hoveredId?: string | null;
   onHover?: (id: string | null) => void;
   fitKey?: number;
+  /** Where distances are measured from; drawn as a "You" (or area-centre) marker. */
+  origin?: { lat: number; lng: number; label: string; kind: string } | null;
+  /** When true, the next click on the map sets the origin. */
+  picking?: boolean;
+  onPick?: (lat: number, lng: number) => void;
 };
 
 if (typeof document !== "undefined" && !document.getElementById("lumap-pin-css")) {
@@ -47,6 +52,12 @@ if (typeof document !== "undefined" && !document.getElementById("lumap-pin-css")
 .lumap-pin-tip span { color: #6f6d78; }
 .lumap-pin:hover .lumap-pin-tip, .lumap-pin.is-hover .lumap-pin-tip, .lumap-pin.is-selected .lumap-pin-tip { opacity: 1; transform: translate(-50%, 0); }
 .lumap-pin:hover, .lumap-pin.is-hover, .lumap-pin.is-selected { z-index: 5; }
+.lumap-origin { display: flex; flex-direction: column; align-items: center; pointer-events: none; }
+.lumap-origin-label { background: #20202a; color: #fff; border-radius: 999px; padding: 3px 9px; font: 600 11px/1.3 system-ui, sans-serif; box-shadow: 0 4px 12px rgba(32,32,42,0.25); white-space: nowrap; margin-bottom: 4px; }
+.lumap-origin-dot { width: 18px; height: 18px; border-radius: 999px; background: #2563eb; border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(37,99,235,0.18), 0 2px 8px rgba(32,32,42,0.3); }
+.lumap-origin.is-area .lumap-origin-dot { background: #20202a; width: 12px; height: 12px; box-shadow: 0 0 0 5px rgba(32,32,42,0.12); }
+.lumap-origin.is-area .lumap-origin-label { background: #fff; color: #20202a; border: 1px solid #e4e2ea; }
+.lumap-picking, .lumap-picking canvas { cursor: crosshair !important; }
 `;
   document.head.appendChild(style);
 }
@@ -63,7 +74,7 @@ function fitPadding() {
   return wide ? { top: 80, bottom: 110, left: 430, right: 90 } : 60;
 }
 
-export function VenueMap({ pins, center, selectedId, onSelect, hoveredId, onHover, fitKey }: VenueMapProps) {
+export function VenueMap({ pins, center, selectedId, onSelect, hoveredId, onHover, fitKey, origin, picking, onPick }: VenueMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
@@ -73,6 +84,13 @@ export function VenueMap({ pins, center, selectedId, onSelect, hoveredId, onHove
   onSelectRef.current = onSelect;
   const onHoverRef = useRef(onHover);
   onHoverRef.current = onHover;
+  const onPickRef = useRef(onPick);
+  onPickRef.current = onPick;
+  const pickingRef = useRef(picking);
+  pickingRef.current = picking;
+  const originMarker = useRef<maplibregl.Marker | null>(null);
+  const originRef = useRef(origin);
+  originRef.current = origin;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -85,6 +103,9 @@ export function VenueMap({ pins, center, selectedId, onSelect, hoveredId, onHove
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     mapRef.current = map;
+    map.on("click", (e) => {
+      if (pickingRef.current) onPickRef.current?.(e.lngLat.lat, e.lngLat.lng);
+    });
     map.once("load", () => {
       loadedRef.current = true;
     });
@@ -140,6 +161,8 @@ export function VenueMap({ pins, center, selectedId, onSelect, hoveredId, onHove
       if (pins.length > 0) {
         const bounds = new maplibregl.LngLatBounds();
         pins.forEach((pin) => bounds.extend([pin.lng, pin.lat]));
+        const o = originRef.current;
+        if (o) bounds.extend([o.lng, o.lat]);
         map.fitBounds(bounds, { padding: fitPadding(), maxZoom: 14, duration: 700 });
       } else {
         map.easeTo({ center: [center.lng, center.lat], zoom: 12, duration: 700 });
@@ -180,5 +203,26 @@ export function VenueMap({ pins, center, selectedId, onSelect, hoveredId, onHove
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fitKey]);
 
-  return <div ref={containerRef} className="h-full w-full" />;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    originMarker.current?.remove();
+    originMarker.current = null;
+    if (!origin) return;
+    const el = document.createElement("div");
+    el.className = `lumap-origin${origin.kind === "area" ? " is-area" : ""}`;
+    const label = document.createElement("div");
+    label.className = "lumap-origin-label";
+    label.textContent = origin.kind === "area" ? `${origin.label} centre` : origin.kind === "postcode" ? `You · ${origin.label}` : "You";
+    const dot = document.createElement("div");
+    dot.className = "lumap-origin-dot";
+    el.append(label, dot);
+    originMarker.current = new maplibregl.Marker({ element: el, anchor: "bottom", offset: [0, 9] }).setLngLat([origin.lng, origin.lat]).addTo(map);
+  }, [origin]);
+
+  useEffect(() => {
+    containerRef.current?.classList.toggle("lumap-picking", Boolean(picking));
+  }, [picking]);
+
+  return <div ref={containerRef} className="h-full w-full" data-testid="venue-map" />;
 }

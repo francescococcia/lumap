@@ -44,6 +44,7 @@ export function quickDates(today: string) {
     { label: "Tomorrow", date: addDays(today, 1) },
     { label: "This Fri", date: thisFri },
     { label: "This Sat", date: nextWeekday(today, "sat") },
+    { label: "This Sun", date: nextWeekday(today, "sun") },
     { label: "Next Fri", date: addDays(thisFri, 7) },
   ];
   const seen = new Set<string>();
