@@ -100,9 +100,11 @@ async function extractVenues(answer: string): Promise<AskVenue[]> {
     const parts = line.split(/\s+[\u2013\u2014-]\s+|:\s+/);
     let name = parts.length > 1 ? parts[0] : line.split(",")[0];
     let address = parts.length > 1 ? parts.slice(1).join(", ") : line;
-    if (POSTCODE.test(name) && i > 0) {
-      address = line;
-      name = stripMd(lines[i - 1]).split(/[\u2013\u2014:]/)[0];
+    // "Address: ..." under a heading line: the heading is the venue name.
+    const isLabel = /^(address|location|where|venue|place)$/i.test(name.trim());
+    if ((POSTCODE.test(name) || isLabel) && i > 0) {
+      address = isLabel ? parts.slice(1).join(", ") : line;
+      name = stripMd(lines[i - 1]).split(/\s+[\u2013\u2014-]\s+|[\u2013\u2014:(]/)[0];
     }
     const details: string[] = [];
     for (let j = i + 1; j < Math.min(lines.length, i + 5); j++) {
