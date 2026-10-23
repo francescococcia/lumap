@@ -12,6 +12,7 @@ import { getSupabase } from "@/lib/supabase";
 import { CHANGE_EVENT, listVenues } from "@/lib/pending-venues";
 import { ASK_VENUES_EVENT, FOCUS_VENUE_EVENT } from "@/components/ask-panel";
 import { USE_CASES, kindScore, venueKind, type UseCaseId } from "@/lib/use-cases";
+import { NEW_TAB, directionsUrl, sessionLink, venueSite } from "@/lib/links";
 import { TYPE_LABEL, matchingSession, sessionsInSlot, sessionWhen, useCaseScore, venueSessions, venueSources, venueType, type Session, type VenueType } from "@/lib/venue-facts";
 import { DAY_LABEL, WEEK, dayWindow, hoursFit, type DayKey, type Hours, type HoursFit } from "@/lib/hours";
 
@@ -493,10 +494,17 @@ export function VenueHome() {
             </div>
           ) : null}
           {visibleResults.map((venue, index) => (
-            <motion.button
-              type="button"
+            <motion.div
+              role="button"
+              tabIndex={0}
               key={venue.id}
               onClick={() => setSelectedId(venue.id)}
+              onKeyDown={(e) => {
+                if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+                  e.preventDefault();
+                  setSelectedId(venue.id);
+                }
+              }}
               onMouseEnter={() => setHoveredId(venue.id)}
               onMouseLeave={() => setHoveredId(null)}
               initial={{ opacity: 0, y: 18, scale: 0.97 }}
@@ -505,7 +513,7 @@ export function VenueHome() {
               whileHover={{ y: -3 }}
               whileTap={{ scale: 0.98 }}
               transition={{ type: "spring", stiffness: 300, damping: 26, delay: index * 0.1 }}
-              className="text-left"
+              className="cursor-pointer rounded-xl text-left outline-none focus-visible:ring-4 focus-visible:ring-[#7854f6]/20"
             >
               <Card className={`transition-shadow ${sessionById[venue.id] && selectedId !== venue.id ? "border-[#f3c1d4] " : ""}${selectedId === venue.id ? "border-[#7854f6] shadow-[0_0_0_3px_rgba(120,84,246,0.15)]" : hoveredId === venue.id ? "border-[#cfc4fb] shadow-md" : "hover:shadow-md"}`}>
                 <CardHeader>
@@ -527,9 +535,10 @@ export function VenueHome() {
                     {venue.distance_m != null ? ` · ${Math.round(venue.distance_m)} m` : ""}
                     {venue.status ? ` · ${venue.status}` : ""}
                   </p>
+                  <VenueLinks venue={venue} compact />
                 </CardContent>
               </Card>
-            </motion.button>
+            </motion.div>
           ))}
           </AnimatePresence>
           {searched && !error && !loading && visibleResults.length === 0 ? (
@@ -579,8 +588,13 @@ export function VenueHome() {
                       .filter((s) => s.title !== sessionById[selected.id]?.title)
                       .map((s) => (
                         <li key={s.title}>
-                          <a href={s.url ?? s.source_url ?? s.source_urls?.[0] ?? "#"} target="_blank" rel="noreferrer" className="font-medium text-[#5a3fd6] hover:underline">{s.title}</a>
+                          <span className="font-medium text-[#30303a]">{s.title}</span>
                           <span className="block text-xs text-[#777580]">{sessionWhen(s)}{s.cadence ? `, ${s.cadence}` : ""}{s.price ? ` · ${s.price}` : ""}</span>
+                          {sessionLink(s) ? (
+                            <a href={sessionLink(s)!.url} {...NEW_TAB} className="inline-flex items-center gap-1 text-xs font-semibold text-[#7854f6] hover:underline">
+                              {sessionLink(s)!.label} <ExternalLink className="h-3 w-3" />
+                            </a>
+                          ) : null}
                         </li>
                       ))}
                   </ul>
@@ -614,7 +628,7 @@ export function VenueHome() {
                   <p className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-xs text-[#8a8894]">
                     Public sources:
                     {venueSources(selected).map((u) => (
-                      <a key={u} href={u} target="_blank" rel="noreferrer" className="text-[#7854f6] hover:underline">{new URL(u).hostname.replace(/^www\./, "")}</a>
+                      <a key={u} href={u} target="_blank" rel="noopener noreferrer" className="text-[#7854f6] hover:underline">{new URL(u).hostname.replace(/^www\./, "")}</a>
                     ))}
                   </p>
                 ) : null}
@@ -644,14 +658,7 @@ export function VenueHome() {
               >
                 {vouched[selected.id] ? <><CheckCircle2 className="mr-2 h-4 w-4" />You vouched for this venue</> : <><ShieldCheck className="mr-2 h-4 w-4" />I've hosted here, vouch</>}
               </Button>
-              <a
-                href={`https://www.google.com/maps/dir/?api=1&destination=${selected.lat},${selected.lng}`}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#e8e7ed] text-sm font-medium text-[#30303a] hover:bg-[#faf9ff]"
-              >
-                <Navigation className="h-4 w-4" /> Directions
-              </a>
+              <VenueLinks venue={selected} />
             </div>
           </motion.aside>
         ) : null}
@@ -685,8 +692,39 @@ function KindChip({ type, good, short }: { type: VenueType; good: boolean; short
   );
 }
 
+function VenueLinks({ venue, compact }: { venue: VenueHit; compact?: boolean }) {
+  const site = venueSite(venue);
+  const stop = (e: React.MouseEvent) => e.stopPropagation();
+  if (compact) {
+    return (
+      <p className="flex flex-wrap items-center gap-1.5 pt-1">
+        <a href={directionsUrl(venue)} {...NEW_TAB} onClick={stop} className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#e8e7ed] bg-white px-2.5 text-xs font-medium text-[#30303a] hover:border-[#cfc4fb] hover:text-[#5a3fd6]">
+          <Navigation className="h-3 w-3" /> Directions
+        </a>
+        {site ? (
+          <a href={site.url} {...NEW_TAB} onClick={stop} className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#e8e7ed] bg-white px-2.5 text-xs font-medium text-[#30303a] hover:border-[#cfc4fb] hover:text-[#5a3fd6]">
+            <ExternalLink className="h-3 w-3" /> {site.label}
+          </a>
+        ) : null}
+      </p>
+    );
+  }
+  return (
+    <div className={`grid gap-2 ${site ? "grid-cols-2" : ""}`}>
+      <a href={directionsUrl(venue)} {...NEW_TAB} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#e8e7ed] text-sm font-medium text-[#30303a] hover:bg-[#faf9ff]">
+        <Navigation className="h-4 w-4" /> Directions
+      </a>
+      {site ? (
+        <a href={site.url} {...NEW_TAB} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#e8e7ed] text-sm font-medium text-[#30303a] hover:bg-[#faf9ff]">
+          <ExternalLink className="h-4 w-4" /> {site.label}
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
 function HappeningHere({ session, large }: { session: Session; large?: boolean }) {
-  const link = session.url ?? session.source_url ?? session.source_urls?.[0] ?? null;
+  const link = sessionLink(session);
   return (
     <div className={`rounded-xl border border-[#f3c1d4] bg-gradient-to-r from-[#fff0f5] to-[#fff7fa] text-[#7a1d45] ${large ? "p-4" : "px-3 py-2"}`}>
       <p className={`flex items-center gap-1.5 font-semibold ${large ? "text-sm" : "text-xs"}`}>
@@ -703,14 +741,21 @@ function HappeningHere({ session, large }: { session: Session; large?: boolean }
           {session.summary ? <p className="mt-2 text-sm leading-6 text-[#5f2a40]">{session.summary}</p> : null}
           {session.rsvp ? <p className="mt-1 text-xs text-[#9b3a62]">{session.rsvp}</p> : null}
           {link ? (
-            <a href={link} target="_blank" rel="noreferrer" className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#e0457b] px-3 text-xs font-semibold !text-white hover:bg-[#c83a6b]">
-              <ExternalLink className="h-3.5 w-3.5" /> See it and register
+            <a href={link.url} {...NEW_TAB} className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#e0457b] px-3 text-xs font-semibold !text-white hover:bg-[#c83a6b]">
+              <ExternalLink className="h-3.5 w-3.5" /> {link.label}
             </a>
           ) : null}
         </>
-      ) : session.rsvp ? (
-        <p className="text-xs text-[#9b3a62]">{session.rsvp}</p>
-      ) : null}
+      ) : (
+        <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-[#9b3a62]">
+          {session.rsvp ? <span>{session.rsvp}</span> : null}
+          {link ? (
+            <a href={link.url} {...NEW_TAB} onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 font-semibold text-[#c2185b] underline-offset-2 hover:underline">
+              {link.label} <ExternalLink className="h-3 w-3" />
+            </a>
+          ) : null}
+        </p>
+      )}
     </div>
   );
 }
