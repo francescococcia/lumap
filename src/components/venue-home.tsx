@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Maximize2, Laptop, PartyPopper, Presentation, AlertCircle, CalendarDays, CheckCircle2, Lock, Mail, Clock, MapPin as MapPinIcon, Navigation, Search, ShieldCheck, Users, X } from "lucide-react";
+import { Maximize2, Sparkles, ExternalLink, Laptop, PartyPopper, Presentation, AlertCircle, CalendarDays, CheckCircle2, Lock, Mail, Clock, MapPin as MapPinIcon, Navigation, Search, ShieldCheck, Users, X } from "lucide-react";
 import { FancySelect, Stepper } from "@/components/ui/fancy-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +11,8 @@ import { LONDON_AREAS, LONDON_CENTER, SEARCH_RADIUS_M, type LondonArea } from "@
 import { getSupabase } from "@/lib/supabase";
 import { CHANGE_EVENT, listVenues } from "@/lib/pending-venues";
 import { ASK_VENUES_EVENT, FOCUS_VENUE_EVENT } from "@/components/ask-panel";
-import { KIND_LABEL, USE_CASES, kindScore, venueKind, type UseCaseId } from "@/lib/use-cases";
+import { USE_CASES, kindScore, venueKind, type UseCaseId } from "@/lib/use-cases";
+import { TYPE_LABEL, matchingSession, sessionsInSlot, sessionWhen, useCaseScore, venueSessions, venueSources, venueType, type Session, type VenueType } from "@/lib/venue-facts";
 import { DAY_LABEL, WEEK, dayWindow, hoursFit, type DayKey, type Hours, type HoursFit } from "@/lib/hours";
 
 export type VenueHit = {
@@ -27,6 +28,10 @@ export type VenueHit = {
   hours?: Hours;
   notes?: string | null;
   terms?: string | null;
+  venue_type?: string | null;
+  good_for?: string[] | null;
+  source_url?: string | null;
+  sessions?: Session[] | null;
 };
 
 const USE_CASE_ICON: Record<UseCaseId, React.ReactNode> = {
@@ -89,7 +94,7 @@ export function VenueHome() {
   const [vouched, setVouched] = useState<Record<string, boolean>>({});
   const [requested, setRequested] = useState<Record<string, boolean>>({});
 
-  const [areaSuggestions, setAreaSuggestions] = useState<{ name: string; count: number; vouched: number; maxCap: number | null }[]>([]);
+  const [areaSuggestions, setAreaSuggestions] = useState<{ name: string; count: number; vouched: number; maxCap: number | null; sessions: number }[]>([]);
 
   async function onSubmit(event?: React.FormEvent, overrideArea?: string) {
     event?.preventDefault();
@@ -153,6 +158,7 @@ export function VenueHome() {
             max_results: 20,
           });
           const hits = ((data ?? []) as VenueHit[]).filter((v) => {
+            if (matchingSession(v, useCaseId, day as DayKey, time, endTime)) return true;
             const f = hoursFit(v.hours, day as DayKey, time, endTime);
             return f.state === "covers" || (f.state === "unknown" && !confirmedOnly);
           });
@@ -167,7 +173,8 @@ export function VenueHome() {
           return { name: area.name, count: hits.length + extra, vouched: hits.filter((x) => x.status !== "pending").length + extra, maxCap: caps.length ? Math.max(...caps) : null };
         })
         .filter((s) => s.count > 0)
-        .sort((a, b) => b.vouched - a.vouched || b.count - a.count || (b.maxCap ?? 0) - (a.maxCap ?? 0));
+        .map((s) => ({ ...s, sessions: perArea.find((p) => p.area.name === s.name)!.hits.filter((v) => matchingSession(v, useCaseId, day as DayKey, time, endTime)).length }))
+        .sort((a, b) => b.sessions - a.sessions || b.vouched - a.vouched || b.count - a.count || (b.maxCap ?? 0) - (a.maxCap ?? 0));
       setAreaSuggestions(stats);
       const seen = new Set<string>();
       const ordered = [...perArea]
@@ -243,23 +250,44 @@ export function VenueHome() {
     return map;
   }, [allResults, day, time, endTime]);
   const askIds = useMemo(() => new Set(askVenues.map((v) => v.id)), [askVenues]);
-  const hiddenByHours = allResults.filter((v) => !askIds.has(v.id) && (fitById[v.id]?.state === "short" || fitById[v.id]?.state === "closed"));
+  const sessionById = useMemo(() => {
+    const map: Record<string, Session> = {};
+    for (const v of allResults) {
+      const s = matchingSession(v, useCaseId, day as DayKey, time, endTime);
+      if (s) map[v.id] = s;
+    }
+    return map;
+  }, [allResults, useCaseId, day, time, endTime]);
+  const hiddenByHours = allResults.filter((v) => !askIds.has(v.id) && !sessionById[v.id] && (fitById[v.id]?.state === "short" || fitById[v.id]?.state === "closed"));
   const visibleResults = useMemo(() => {
     const rank = (v: VenueHit) =>
-      (askIds.has(v.id) ? 1000 : fitById[v.id]?.state === "covers" ? 200 : 100) +
-      kindScore(venueKind(v), useCase) * 20 +
+      (askIds.has(v.id) ? 1000 : sessionById[v.id] ? 500 : fitById[v.id]?.state === "covers" ? 200 : 100) +
+      (useCaseScore(v, useCaseId) ? 60 : kindScore(venueKind(v), useCase) * 5) +
       (v.status === "verified" ? 5 : 0) +
       (v.capacity != null ? 2 : 0);
     return allResults
       .filter((v) => {
-        if (askIds.has(v.id)) return true;
+        if (askIds.has(v.id) || sessionById[v.id]) return true;
         const st = fitById[v.id]?.state;
         return st === "covers" || (st === "unknown" && !confirmedOnly);
       })
       .map((v, i) => ({ v, i }))
       .sort((a, b) => rank(b.v) - rank(a.v) || a.i - b.i)
       .map(({ v }) => v);
-  }, [allResults, fitById, askIds, confirmedOnly, useCase]);
+  }, [allResults, fitById, askIds, sessionById, confirmedOnly, useCase, useCaseId]);
+
+  // Sessions in this slot that the current area does not cover, so a
+  // "coworking on Friday" search can point at Somerset House from anywhere.
+  const elsewhere = useMemo(() => {
+    if (!searched) return [];
+    const shown = new Set(visibleResults.map((v) => v.name.toLowerCase()));
+    return sessionsInSlot(useCaseId, day as DayKey, time, endTime)
+      .filter((s) => !shown.has((s.venue_name ?? "").toLowerCase()))
+      .map((s) => {
+        const near = [...LONDON_AREAS].sort((a, b) => Math.hypot(a.lat - s.lat, (a.lng - s.lng) * 0.62) - Math.hypot(b.lat - s.lat, (b.lng - s.lng) * 0.62))[0];
+        return { session: s, area: near };
+      });
+  }, [searched, visibleResults, useCaseId, day, time, endTime]);
 
   const autoSearched = useRef(false);
   useEffect(() => {
@@ -277,12 +305,14 @@ export function VenueHome() {
         const lng = Number(venue.lng);
         if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
         const fit = askIds.has(venue.id) ? ("ask" as const) : fitById[venue.id]?.state === "covers" ? ("covers" as const) : ("unknown" as const);
-        return [{ id: venue.id, name: venue.name, lat, lng, status: venue.status, fit, kind: KIND_LABEL[venueKind(venue)], note: fitById[venue.id]?.label }];
+        const session = sessionById[venue.id];
+        return [{ id: venue.id, name: venue.name, lat, lng, status: venue.status, fit, kind: TYPE_LABEL[venueType(venue)], note: session ? `${session.title}, ${sessionWhen(session)}` : fitById[venue.id]?.label, session: Boolean(session) }];
       }),
-    [visibleResults, askIds, fitById],
+    [visibleResults, askIds, fitById, sessionById],
   );
   const selected = allResults.find((venue) => venue.id === selectedId) ?? null;
-  const clean = (text: string | null) => (text ?? "").replace(/\u00c2/g, "");
+  // Some rows were pasted through a Windows code page, so undo the common mojibake.
+  const clean = (text: string | null) => (text ?? "").replace(/\u00e2\u20ac\u201c/g, "–").replace(/\u00e2\u20ac\u2122/g, "’").replace(/\u00c2/g, "");
 
   return (
     <div className="relative h-[calc(100vh-4rem)] min-h-[560px]">
@@ -305,6 +335,11 @@ export function VenueHome() {
                 {item.t}
               </span>
             ))}
+            {pins.some((p) => p.session) ? (
+              <span className="inline-flex items-center gap-1.5 font-semibold text-[#b4235e]">
+                <span className="grid h-3.5 w-3.5 place-items-center rounded-full bg-[#e0457b] text-[8px] leading-none text-white">★</span> Session that day
+              </span>
+            ) : null}
             <span className="inline-flex items-center gap-1.5 text-[#6f6d78]">
               <span className="h-3 w-3 rounded-full border-2 border-dashed border-[#b8b5c2]" /> Pending vouches
             </span>
@@ -428,11 +463,34 @@ export function VenueHome() {
               <div className="flex flex-wrap gap-1.5">
                 {areaSuggestions.map((s, i) => (
                   <button key={s.name} type="button" onClick={() => { setAreaName(s.name); void onSubmit(undefined, s.name); }} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${i === 0 ? "bg-[#7854f6] !text-white" : "bg-white text-[#5a3fd6] ring-1 ring-[#e4ddfc] hover:bg-[#f0ebff]"}`}>
-                    {i === 0 ? "Best: " : ""}{s.name} · {s.count} {s.count === 1 ? "room" : "rooms"}{s.vouched ? `, ${s.vouched} vouched` : ""}
+                    {i === 0 ? "Best: " : ""}{s.name} · {s.count} {s.count === 1 ? "room" : "rooms"}{s.sessions ? `, ${s.sessions} ${s.sessions === 1 ? "session" : "sessions"}` : s.vouched ? `, ${s.vouched} vouched` : ""}
                   </button>
                 ))}
               </div>
             </motion.div>
+          ) : null}
+          {!loading && elsewhere.length ? (
+            <div className="rounded-2xl border border-[#f3c1d4] bg-[#fff7fa] p-3">
+              <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#b4235e]">
+                <Sparkles className="h-3.5 w-3.5" /> {DAY_LABEL[day as DayKey]} sessions in other areas
+              </p>
+              <div className="grid gap-1.5">
+                {elsewhere.map(({ session, area }) => (
+                  <button
+                    key={session.title}
+                    type="button"
+                    onClick={() => {
+                      setAreaName(area.name);
+                      void onSubmit(undefined, area.name);
+                    }}
+                    className="rounded-xl bg-white px-3 py-2 text-left text-xs text-[#7a1d45] ring-1 ring-[#f3c1d4] transition-colors hover:bg-[#fff0f5]"
+                  >
+                    <span className="block font-semibold">{session.title}</span>
+                    <span className="block text-[#9b3a62]">{session.venue_name} · {sessionWhen(session)} · show {area.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           ) : null}
           {visibleResults.map((venue, index) => (
             <motion.button
@@ -449,7 +507,7 @@ export function VenueHome() {
               transition={{ type: "spring", stiffness: 300, damping: 26, delay: index * 0.1 }}
               className="text-left"
             >
-              <Card className={`transition-shadow ${selectedId === venue.id ? "border-[#7854f6] shadow-[0_0_0_3px_rgba(120,84,246,0.15)]" : hoveredId === venue.id ? "border-[#cfc4fb] shadow-md" : "hover:shadow-md"}`}>
+              <Card className={`transition-shadow ${sessionById[venue.id] && selectedId !== venue.id ? "border-[#f3c1d4] " : ""}${selectedId === venue.id ? "border-[#7854f6] shadow-[0_0_0_3px_rgba(120,84,246,0.15)]" : hoveredId === venue.id ? "border-[#cfc4fb] shadow-md" : "hover:shadow-md"}`}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold text-white" style={{ background: pins.find((p) => p.id === venue.id)?.fit ? FIT_COLOR[pins.find((p) => p.id === venue.id)!.fit!] : "#7854f6" }}>{index + 1}</span>
@@ -460,8 +518,9 @@ export function VenueHome() {
                 <CardContent className="grid gap-1.5 text-[#484751]">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <FitBadge fit={fitById[venue.id]} day={day as DayKey} />
-                    <KindChip kind={venueKind(venue)} good={kindScore(venueKind(venue), useCase) > 0} short={useCase.short} />
+                    <KindChip type={venueType(venue)} good={useCaseScore(venue, useCaseId) > 0} short={useCase.short} />
                   </div>
+                  {sessionById[venue.id] ? <HappeningHere session={sessionById[venue.id]} /> : null}
                   <p>{clean(venue.reason)}</p>
                   <p className="text-xs text-[#777580]">
                     {venue.capacity ? `Fits ${venue.capacity}` : "Capacity unknown"}
@@ -511,6 +570,22 @@ export function VenueHome() {
                 <div className="rounded-2xl bg-[#faf9ff] p-3"><p className="text-xs text-[#8a8894]">Capacity</p><p className="mt-0.5 flex items-center gap-1.5 font-semibold"><Users className="h-4 w-4 text-[#7854f6]" />{selected.capacity ?? "?"}</p></div>
                 <div className="rounded-2xl bg-[#faf9ff] p-3"><p className="text-xs text-[#8a8894]">Distance</p><p className="mt-0.5 flex items-center gap-1.5 font-semibold"><Navigation className="h-4 w-4 text-[#7854f6]" />{selected.distance_m != null ? `${Math.round(selected.distance_m)} m` : "?"}</p></div>
               </div>
+              {sessionById[selected.id] ? <HappeningHere session={sessionById[selected.id]} large /> : null}
+              {venueSessions(selected).filter((s) => s !== sessionById[selected.id] && s.title !== sessionById[selected.id]?.title).length ? (
+                <div className="rounded-2xl border border-[#ecebf0] p-4">
+                  <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#8473c2]"><CalendarDays className="h-3.5 w-3.5" /> {sessionById[selected.id] ? "Also regular here" : "Regular here"}</p>
+                  <ul className="grid gap-2 text-sm text-[#484751]">
+                    {venueSessions(selected)
+                      .filter((s) => s.title !== sessionById[selected.id]?.title)
+                      .map((s) => (
+                        <li key={s.title}>
+                          <a href={s.url ?? s.source_url ?? s.source_urls?.[0] ?? "#"} target="_blank" rel="noreferrer" className="font-medium text-[#5a3fd6] hover:underline">{s.title}</a>
+                          <span className="block text-xs text-[#777580]">{sessionWhen(s)}{s.cadence ? `, ${s.cadence}` : ""}{s.price ? ` · ${s.price}` : ""}</span>
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              ) : null}
               <div className="rounded-2xl border border-[#ecebf0] p-4">
                 <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#8473c2]"><Clock className="h-3.5 w-3.5" /> Opening hours</p>
                 <FitBadge fit={fitById[selected.id]} day={day as DayKey} />
@@ -533,6 +608,16 @@ export function VenueHome() {
               <div className="rounded-2xl border border-[#ecebf0] p-4">
                 <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#8473c2]">Why it matches</p>
                 <p className="text-sm leading-6 text-[#484751]">{clean(selected.reason)}</p>
+                <div className="mt-2"><KindChip type={venueType(selected)} good={useCaseScore(selected, useCaseId) > 0} short={useCase.short} /></div>
+                {selected.notes ? <p className="mt-2 text-xs leading-5 whitespace-pre-line text-[#6f6d78]">{clean(selected.notes)}</p> : null}
+                {venueSources(selected).length ? (
+                  <p className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-xs text-[#8a8894]">
+                    Public sources:
+                    {venueSources(selected).map((u) => (
+                      <a key={u} href={u} target="_blank" rel="noreferrer" className="text-[#7854f6] hover:underline">{new URL(u).hostname.replace(/^www\./, "")}</a>
+                    ))}
+                  </p>
+                ) : null}
               </div>
               <div className="rounded-2xl border border-[#f3e3c3] bg-[#fffaf0] p-4">
                 <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#a86a10]">
@@ -592,10 +677,40 @@ function FitBadge({ fit, day }: { fit?: HoursFit; day: DayKey }) {
   );
 }
 
-function KindChip({ kind, good, short }: { kind: ReturnType<typeof venueKind>; good: boolean; short: string }) {
+function KindChip({ type, good, short }: { type: VenueType; good: boolean; short: string }) {
   return (
     <span className={`inline-flex w-fit items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${good ? "bg-[#f0ebff] text-[#5a3fd6]" : "bg-[#f4f3f8] text-[#6f6d78]"}`}>
-      {KIND_LABEL[kind]}{good ? ` · good for ${short.toLowerCase()}` : ""}
+      {TYPE_LABEL[type]}{good ? ` · good for ${short.toLowerCase()}` : ""}
     </span>
+  );
+}
+
+function HappeningHere({ session, large }: { session: Session; large?: boolean }) {
+  const link = session.url ?? session.source_url ?? session.source_urls?.[0] ?? null;
+  return (
+    <div className={`rounded-xl border border-[#f3c1d4] bg-gradient-to-r from-[#fff0f5] to-[#fff7fa] text-[#7a1d45] ${large ? "p-4" : "px-3 py-2"}`}>
+      <p className={`flex items-center gap-1.5 font-semibold ${large ? "text-sm" : "text-xs"}`}>
+        <Sparkles className="h-3.5 w-3.5 shrink-0 text-[#e0457b]" />
+        Happening here: {session.title}
+      </p>
+      <p className="mt-0.5 text-xs text-[#9b3a62]">
+        {sessionWhen(session)}
+        {session.cadence ? `, ${session.cadence}` : ""}
+        {session.price ? ` · ${session.price}` : ""}
+      </p>
+      {large ? (
+        <>
+          {session.summary ? <p className="mt-2 text-sm leading-6 text-[#5f2a40]">{session.summary}</p> : null}
+          {session.rsvp ? <p className="mt-1 text-xs text-[#9b3a62]">{session.rsvp}</p> : null}
+          {link ? (
+            <a href={link} target="_blank" rel="noreferrer" className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#e0457b] px-3 text-xs font-semibold !text-white hover:bg-[#c83a6b]">
+              <ExternalLink className="h-3.5 w-3.5" /> See it and register
+            </a>
+          ) : null}
+        </>
+      ) : session.rsvp ? (
+        <p className="text-xs text-[#9b3a62]">{session.rsvp}</p>
+      ) : null}
+    </div>
   );
 }

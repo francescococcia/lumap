@@ -15,6 +15,7 @@ export type MapPin = {
   fit?: "covers" | "unknown" | "ask";
   kind?: string;
   note?: string;
+  session?: boolean;
 };
 
 type VenueMapProps = {
@@ -39,6 +40,8 @@ if (typeof document !== "undefined" && !document.getElementById("lumap-pin-css")
 .lumap-pin.is-selected .lumap-pin-dot { transform: scale(1.25); animation: lumapPulse 1.4s ease-out infinite; border-color: #7854f6; }
 .lumap-pin.is-hover .lumap-pin-dot { transform: scale(1.2); }
 .lumap-pin.is-pending .lumap-pin-dot { border-style: dashed; }
+.lumap-pin.is-session .lumap-pin-dot { box-shadow: 0 0 0 3px #e0457b, 0 6px 16px rgba(224,69,123,0.45); }
+.lumap-pin-star { position: absolute; top: -7px; right: -7px; width: 16px; height: 16px; border-radius: 999px; background: #e0457b; color: #fff; border: 2px solid #fff; font: 700 8px/12px system-ui, sans-serif; text-align: center; pointer-events: none; }
 .lumap-pin-tip { position: absolute; bottom: 36px; left: 50%; transform: translate(-50%, 4px); white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .15s ease, transform .15s ease; background: #fff; color: #20202a; border: 1px solid #ecebf0; border-radius: 12px; padding: 6px 10px; font: 500 12px/1.35 system-ui, sans-serif; box-shadow: 0 8px 24px rgba(32,32,42,0.12); }
 .lumap-pin-tip b { display: block; font-weight: 600; }
 .lumap-pin-tip span { color: #6f6d78; }
@@ -103,6 +106,7 @@ export function VenueMap({ pins, center, selectedId, onSelect, hoveredId, onHove
         el.className = "lumap-pin";
         el.dataset.id = pin.id;
         if (pin.status === "pending") el.classList.add("is-pending");
+        if (pin.session) el.classList.add("is-session");
         el.setAttribute("aria-label", pin.name);
         const dot = document.createElement("div");
         dot.className = "lumap-pin-dot";
@@ -110,6 +114,12 @@ export function VenueMap({ pins, center, selectedId, onSelect, hoveredId, onHove
         dot.style.background = pinColor(pin);
         dot.style.animationDelay = `${index * 0.12}s`;
         el.appendChild(dot);
+        if (pin.session) {
+          const star = document.createElement("span");
+          star.className = "lumap-pin-star";
+          star.textContent = "★";
+          el.appendChild(star);
+        }
         const tip = document.createElement("div");
         tip.className = "lumap-pin-tip";
         const b = document.createElement("b");
