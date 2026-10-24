@@ -1,5 +1,6 @@
 import { askCognee } from "../../../../scripts/cognee_search";
-import { intentOf, localAnswer, placesIn, sessionTitlesAt, venueDirectory, type VenueRow } from "../../../lib/ask-local";
+import { fitsGroup, intentOf, localAnswer, placesIn, sessionTitlesAt, venueDirectory, type VenueRow } from "../../../lib/ask-local";
+import { mentionedIn } from "../../../lib/venue-match";
 import { dateLabel, londonToday, weekdayOf } from "../../../lib/dates";
 import { datesIn, type When } from "../../../lib/when";
 
@@ -11,11 +12,14 @@ export const maxDuration = 30;
 const GROUNDING =
   "Only state facts written in the context. Never estimate a capacity, address, price or time (for example a capacity from past attendance). Leave out details you don't have; only say 'not listed' when they asked for that detail. Don't invent venues, addresses or numbers.";
 
-function systemPrompt(today: string, when: When | null) {
+function systemPrompt(today: string, when: When | null, people: number | null) {
   return [
     `You are Lumap, a friendly London local who organises community events and knows the city's venues. Today is ${dateLabel(today)} ${today.slice(0, 4)} in London.`,
     when
       ? `They mean ${when.phrase}. The dates are: ${datesIn(when).map(dateLabel).join(", ")}. Only suggest sessions and venues that fit those dates, and put the date from that list next to each pick (a Friday session is on the Friday listed).`
+      : "",
+    people
+      ? `The group is about ${people} people. Only suggest venues that comfortably fit ${people}: not smaller, and not rooms more than about three times bigger (so nothing over ${Math.max(Math.round(people * 3.5), people + 30)}). Say the capacity when it's given.`
       : "",
     "Answer using only the provided context, the way you'd reply to a friend, in British English:",
     "- one short, warm opening sentence (no heading);",
@@ -57,6 +61,32 @@ function tidy(text: string) {
     .replace(/(?<!\])\(\s*(https?:\/\/[^\s)]+)\s*\)/g, (_m, url: string) => `[${/^https?:\/\/(www\.)?(luma\.com|lu\.ma)\//i.test(url) ? "Register on Luma" : "Event page"}](${url})`)
     .replace(/register on Luma\s*\[Register on Luma\]/gi, "[Register on Luma]")
     .replace(/[ \t]+$/gm, "");
+}
+
+/**
+ * Removes picks whose known capacity is far from the group size: the line naming the venue
+ * plus its "why" lines up to the next pick or the closing question.
+ */
+function dropMisfits(text: string, rows: VenueRow[], people: number | null) {
+  const places = placesIn(text, rows);
+  const misfits = places.filter((r) => !fitsGroup(r.capacity, people));
+  if (!misfits.length) return text;
+  const lines = text.split(/\r?\n/);
+  const isPick = (l: string) => /^\s*(?:[-*\u2022]|\d+[.)])\s+/.test(l) || mentionedIn(l, places).length > 0;
+  const out: string[] = [];
+  let dropping = false;
+  lines.forEach((line, i) => {
+    const last = i === lines.length - 1 || /\?\s*$/.test(line);
+    if (i > 0 && !last && mentionedIn(line, misfits).length && !mentionedIn(line, places.filter((p) => !misfits.includes(p))).length) {
+      dropping = true;
+      return;
+    }
+    if (dropping && line.trim() && !isPick(line) && !last) return;
+    if (dropping && !line.trim()) return;
+    dropping = false;
+    out.push(line);
+  });
+  return out.join("\n").replace(/\n{3,}/g, "\n\n");
 }
 
 type Hit = Omit<VenueRow, "guest_count_lower_bound"> & { reason: string | null; distance_m: number | null; sessions?: unknown; aliases?: string[] };
@@ -120,13 +150,13 @@ export async function POST(request: Request): Promise<Response> {
 
   const dated = intent.when ? `${question.trim()}\n\n(Dates they mean: ${intent.when.label}.)` : question.trim();
   const query = intent.occasion === "cowork" ? `${dated}\n\nWhich London coworking sessions or spaces fit? Include the venue, date, time, price and how to register.` : dated;
-  const raw = await askCognee(query, { systemPrompt: systemPrompt(today, intent.when), timeoutMs: 22000 });
+  const raw = await askCognee(query, { systemPrompt: systemPrompt(today, intent.when, intent.people), timeoutMs: 22000 });
   if (raw && raw.length > 80) {
     // The model writes non-breaking hyphens (U+2011), which break URLs like luma.com/london-oct-23.
     const split = splitEvidence(raw.replace(/[\u2010\u2011]/g, "-"));
-    const answer = tidy(fixDates(split.answer, intent.when));
-    const sources = split.sources;
     const rows = await rowsPromise;
+    const answer = dropMisfits(tidy(fixDates(split.answer, intent.when)), rows, intent.people);
+    const sources = split.sources;
     return Response.json({ answer, sources, places: await toHits(placesIn(answer, rows)), when: intent.when, from: "memory" });
   }
   if (mode !== "memory") {

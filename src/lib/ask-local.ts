@@ -110,6 +110,12 @@ const GOOD_FOR_TEXT: Record<GoodFor, string> = {
   coworking: "good for a laptop day",
 };
 
+/** A venue fits a group when its listed capacity is at least the headcount and not far bigger (about 3x). */
+export function fitsGroup(capacity: number | null | undefined, people: number | null | undefined) {
+  if (!people || capacity == null) return true;
+  return capacity >= people && capacity <= Math.max(Math.round(people * 3.5), people + 30);
+}
+
 const km = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => Math.hypot(a.lat - b.lat, (a.lng - b.lng) * 0.62) * 111;
 const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 
@@ -173,6 +179,7 @@ function venueAnswer(intent: Intent, rows: VenueRow[]) {
   const fits = rows
     .filter((r) => !occasion || venueGoodFor(r).includes(GOOD_FOR[occasion]))
     .filter((r) => !need || size(r) == null || (size(r) as number) >= need)
+    .filter((r) => fitsGroup(r.capacity, need))
     .filter((r) => !day || dayWindow(r.hours, day) !== null)
     .map((r) => {
       const s = size(r);
