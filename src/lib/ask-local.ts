@@ -53,11 +53,11 @@ export async function venueDirectory(): Promise<VenueRow[]> {
 }
 
 type Occasion = "cowork" | "party" | "meetup" | "workshop";
-export type Intent = { occasion: Occasion | null; birthday: boolean; people: number | null; area: LondonArea | null; when: When | null };
+export type Intent = { occasion: Occasion | null; birthday: boolean; meal: string | null; people: number | null; area: LondonArea | null; when: When | null };
 
 const COWORK_RE = /co-?work|work (alongside|with|next to)|deep work|\bdesk\b|laptop|somewhere to work/i;
 const OCCASIONS: [Occasion, RegExp][] = [
-  ["party", /birthday|bday|party|celebrat|drinks|leaving do|hen do|stag|anniversary|engagement|christening|baby shower/i],
+  ["party", /birthday|bday|party|celebrat|drinks|dinner|lunch|supper|meal\b|leaving do|hen do|stag|anniversary|engagement|christening|baby shower/i],
   ["workshop", /workshop|class\b|training|course|hack ?night|life drawing/i],
   ["meetup", /meet-?up|talk|event|hackathon|launch|panel|networking|conference|community|demo day|book club/i],
 ];
@@ -78,7 +78,7 @@ function areaIn(q: string) {
 function peopleIn(q: string) {
   const m =
     /\b(\d{1,4})\s*(?:-\s*)?(?:people|persons?|guests|pax|ppl|attendees|friends|of us|heads|person|seated|standing)\b/i.exec(q) ??
-    /\bfor (?:about |around |roughly |~)?(\d{1,4})\b(?!\s*(?:st|nd|rd|th|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|am|pm|:|\/|-|minutes|mins|hours|hrs|days|weeks))/i.exec(q);
+    /\bfor (?:about |around |roughly |~)?(\d{1,4})\b(?!(?:st|nd|rd|th)\b|\s*(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*|am|pm|minutes|mins|hours|hrs|days|weeks)\b|\s*[:\/-])/i.exec(q);
   const n = m ? Number(m[1]) : null;
   return n && n > 1 && n < 5000 ? n : null;
 }
@@ -95,6 +95,7 @@ export function intentOf(latest: string, previous: string[] = [], today = london
   return {
     occasion: first(occasionIn),
     birthday: all.some((q) => /birthday|bday/i.test(q)),
+    meal: first((q) => /\b(dinner|lunch|supper)\b/i.exec(q)?.[1].toLowerCase() ?? null),
     people: first(peopleIn),
     area: first(areaIn),
     when: first((q) => resolveWhen(q, today)),
@@ -191,7 +192,7 @@ function venueAnswer(intent: Intent, rows: VenueRow[]) {
     .slice(0, 4)
     .map((x) => x.r);
 
-  const what = intent.birthday ? "a birthday" : occasion === "party" ? "a party" : occasion === "workshop" ? "a workshop" : occasion === "meetup" ? "a meetup" : "your plans";
+  const what = intent.birthday ? "a birthday" : intent.meal ? `a ${intent.meal}` : occasion === "party" ? "a party" : occasion === "workshop" ? "a workshop" : occasion === "meetup" ? "a meetup" : "your plans";
   const head = `${what}${need ? ` for ${need}` : ""}${intent.when ? ` ${intent.when.phrase}` : ""}${intent.area ? ` near ${intent.area.name}` : ""}`;
   const lines: string[] = [];
   const names: string[] = [];

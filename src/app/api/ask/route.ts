@@ -57,7 +57,7 @@ function fixDates(text: string, when: When | null) {
 /** Drops "time: not listed, price: not listed" filler the model adds for fields nobody asked about. */
 function tidy(text: string) {
   return text
-    .replace(/[;,–-]?\s*(?:time|price|registration|address|capacity|day)\s*:\s*not listed\b\.?/gi, "")
+    .replace(/[;,–-]?\s*(?:time|price|registration|address|capacity|day)\s*:?\s*not listed\b\.?/gi, "")
     .replace(/(?<!\])\(\s*(https?:\/\/[^\s)]+)\s*\)/g, (_m, url: string) => `[${/^https?:\/\/(www\.)?(luma\.com|lu\.ma)\//i.test(url) ? "Register on Luma" : "Event page"}](${url})`)
     .replace(/register on Luma\s*\[Register on Luma\]/gi, "[Register on Luma]")
     .replace(/[ \t]+$/gm, "");
