@@ -17,7 +17,7 @@ Confirmed from venue slides and Luma. Times are London time: **BST (UTC+1) until
 - About 16:30 end
 
 ## Challenges and sponsor bounties
-Full criteria and our fit: `knowledge/sponsors-fit.md`.
+Our fit, criteria mapping and bounty choice: `knowledge/plan.md` §7–8.
 1. **The Real World** (Encode): AI that understands the physical world from photos, audio, maps and open data.
 2. **Agents That Ship** (Encode): an agent that does a real job end to end, with real tools, error recovery and human approval of risky steps.
 3. **Google DeepMind, Gemini 4 Argon:** $7k / $5k / $3k in Gemini API credits.

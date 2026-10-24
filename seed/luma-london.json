@@ -135,28 +135,6 @@
       "location_type": "offline"
     },
     {
-      "api_id": "evt-lN7hh5bk7fiSQvF",
-      "name": "Grok Bot Community Engineering London Hackathon",
-      "start_at": "2026-10-22T17:00:00.000Z",
-      "end_at": "2026-10-22T22:00:00.000Z",
-      "url": "https://lu.ma/eveur09a",
-      "guest_count": 0,
-      "calendar": {
-        "name": "SpaceXAI for London, England",
-        "api_id": "cal-QQGEIJl1K33N0zb"
-      },
-      "geo_address_info": {
-        "place_name": null,
-        "full_address": null,
-        "short_address": null,
-        "city": "London",
-        "lat": 51.49510226424393,
-        "lng": -0.22815484905968786,
-        "address_hidden": true
-      },
-      "location_type": "offline"
-    },
-    {
       "api_id": "evt-dHqbg51NFr7zaaz",
       "name": "Chet Rock Jeans Collection Launch",
       "start_at": "2026-10-22T17:30:00.000Z",

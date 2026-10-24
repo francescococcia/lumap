@@ -4,11 +4,11 @@
  "sources": {
   "luma": {
    "url": "https://api.lu.ma/discover/get-paginated-events?discover_place_api_id=discplace-QCcNk3HXowOR97j",
-   "count": 59,
+   "count": 58,
    "status": "ok",
    "note": "existing snapshot luma-london.json (in-person only)",
    "dropped_finished": 0,
-   "kept_after_dedup": 59
+   "kept_after_dedup": 58
   },
   "devpost": {
    "url": "https://devpost.com/api/hackathons?status[]=upcoming|open&search=london",
@@ -627,29 +627,6 @@
     "3 registered",
     "in person, London",
     "in 13 days",
-    "hackathon"
-   ]
-  },
-  {
-   "id": "luma:evt-lN7hh5bk7fiSQvF",
-   "source": "luma",
-   "title": "Grok Bot Community Engineering London Hackathon",
-   "url": "https://lu.ma/eveur09a",
-   "start_at": "2026-10-22T17:00:00.000Z",
-   "end_at": "2026-10-22T22:00:00.000Z",
-   "city": "London",
-   "lat": 51.49510226424393,
-   "lng": -0.22815484905968786,
-   "format": "in_person",
-   "size": 0,
-   "size_kind": "going",
-   "organiser": "SpaceXAI for London, England",
-   "themes": [],
-   "is_hackathon": true,
-   "score": 5.5,
-   "reasons": [
-    "in person, London",
-    "happening now",
     "hackathon"
    ]
   },

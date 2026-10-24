@@ -1,6 +1,6 @@
 # Lumap seed: Luma London snapshot
 
-- Source: Luma London discover feed (public, no key, undocumented): https://api.lu.ma/discover/get-paginated-events?discover_place_api_id=discplace-QCcNk3HXowOR97j . Fetched 2026-10-22, 2 pages, 59 upcoming events (22 Oct to 26 Nov 2026).
+- Source: Luma London discover feed (public, no key, undocumented): https://api.lu.ma/discover/get-paginated-events?discover_place_api_id=discplace-QCcNk3HXowOR97j . Fetched 2026-10-22, 2 pages, 58 upcoming events (22 Oct to 26 Nov 2026; one past event removed from the snapshot).
 - `luma-london.json`: all in-person events (name, dates, url, guest_count, calendar, address, lat/lng). `address_hidden: true` means Luma hides the address until RSVP and the coordinates are fuzzed.
 - `venues-candidates.json`: candidate venues grouped by coordinates (4 dp), sorted by events_count. Status is `pending`: they are not verified. `max_guest_count_lower_bound` is the largest RSVP count seen, a lower bound and not a capacity. There are no claims about AV, terms or availability. Events with hidden addresses are excluded.
 - `hosted_events.json`: who hosted where (venue_key, community = Luma calendar name, event, date, guest_count). This is the "past hosts" memory.
@@ -14,7 +14,7 @@ Fetched 2026-10-22 ~19:50 BST, politely (1 request every 2+ s, browser User-Agen
 
 | Source | URL | Kept |
 |---|---|---|
-| Luma (existing `luma-london.json`) | Luma London discover feed | 59 in person, London |
+| Luma (existing `luma-london.json`) | Luma London discover feed | 58 in person, London |
 | Devpost | `https://devpost.com/api/hackathons?status[]=upcoming&search=london` (+ `status[]=open`) | 1 (2 returned; Hack Western 13 is London, Ontario, dropped; open = 0) |
 | BuilderBase | `https://edge.builderbase.com/super-events/public/discovery?status=active&limit=100` | UK (country GB/United Kingdom) or online, of 29 |
 | MLH | `https://mlh.io/seasons/2027/events` (`<script data-page="app">` JSON, `props.upcomingEvents`) | GB or online, of 69 worldwide |

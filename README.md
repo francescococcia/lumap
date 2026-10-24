@@ -1,14 +1,14 @@
-# Lumap: accessible venue finder (Encode London 2026)
+# Lumap Near Me: what's happening around you, in plain English (Encode London 2026)
 
-**Find a London venue your whole group can actually get into.** Lumap reads venue photos and listings, checks them against OpenStreetMap, TfL and the weather, and shows the top 3 with reasons and a confidence level. When it can't tell, it says "not sure" and drafts a question to the venue, which you approve before it's sent.
+**One map for a London neighbourhood, built from live open data:** TfL lines, stations and roadworks, planning applications, weather, air quality, flood alerts and Luma events. Ask questions in plain English and get answers with sources, freshness and confidence. When it suggests a place, it plans the trip with TfL (step-free options, live disruptions, walking or cycling, weather advice). Take a photo to draft a Luma event or a new map entry; nothing is published until you approve it, and every step goes in an action log.
 
-**For:** London community organisers running 30–100 person events with wheelchair users or people who need step-free access, quiet rooms or seating. Today they phone each venue to ask "is it really step-free?"
+**For:** people who just arrived in a London area (organisers, newcomers, wheelchair users) who want to know what's on, what's changing and how to get there. Plan: `knowledge/plan.md`. Pitch and demo: `knowledge/pitch.md`.
 
 **Live demo:** [lumap-self.vercel.app](https://lumap-self.vercel.app) · Built for the **Encode London Hackathon** (23–25 Oct 2026): The Real World + Agents That Ship.
 
-> **Disclosure:** Lumap's base map and chat started at an earlier hackathon on 22 Oct 2026. Last pre-Encode commit: `5809e2d` (tag `encode-baseline`). Encode-built features are listed below; see `git diff encode-baseline..encode-london`.
+> **Disclosure:** The base map and chat existed before Encode kickoff; features listed as Encode-built were made during the hackathon. Last pre-Encode commit: `5809e2d` (tag `encode-baseline`); see `git diff encode-baseline..encode-london`.
 
-![Lumap: venue search with pins and the venue panel](docs/screenshot.png)
+![Lumap: map with pins and the venue panel](docs/screenshot.png)
 
 ## Status (Encode checkpoints)
 - [x] CP1 Fri 18:00: check-in (idea, bounty)
@@ -16,12 +16,13 @@
 - [ ] CP3 Sun 12:00 GMT: final submission (3-min video, repo, bounties)
 
 ## Built at Encode (Fri 23 Oct 17:00 onwards)
-- [ ] Photo intake with in-browser face/plate blur and EXIF/GPS stripping
-- [ ] AI access read (step-free entrance, steps, toilet, seating, AV, noise) with confidence, evidence and "not sure"
-- [ ] Verification loop: each claim checked against OSM `wheelchair` tags and TfL step-free data
-- [ ] TfL nearest step-free station + journey time, Open-Meteo evening forecast
-- [ ] Accessible top 3 on the map with reasons, confidence and sources
-- [ ] Request agent: drafts questions for the unknowns, human approves, sends to a demo inbox only, and logs every step
+- [ ] Neighbourhood briefing `/api/near`: TfL, roadworks, planning, weather, air quality, flood alerts, with source + time on every line
+- [ ] Map layers for each source, next to the existing venues and Luma events
+- [ ] Ask agent with tool calls (Gemini): sourced answers, confidence, "data missing" said plainly
+- [ ] Get there: TfL Journey Planner with step-free options, disruptions and weather advice
+- [ ] Photo intake: EXIF GPS read then stripped, faces blurred in the browser, photo read with confidence
+- [ ] Photo → Luma event (approve first) · Photo → OpenStreetMap note + Google Maps "Add a missing place" link (approve first)
+- [ ] Action log of every tool call and approval
 - [x] General polish on Fri evening (sign-in, date picker, postcode origin, Ask fixes). Not part of the Encode feature.
 
 ## Already there before Encode
@@ -32,23 +33,28 @@
 - **Events feed:** `/api/calendar.ics`, a ranked London community events feed.
 
 ## Models & data sources
-*(fill in as built)*
+*(fill in as built; full table with endpoints in `knowledge/plan.md` §5)*
 | Model / source | Used for |
 |---|---|
-| Gemini API (`gemini-4-argon` / `gemini-3.8-flash`, TBD) | photo + listing access read, claim verification |
-| xAI Grok + Cognee Cloud | Ask answers (grounded in retrieved docs) |
-| OpenStreetMap (Overpass) | `wheelchair`, `toilets:wheelchair` tags |
-| TfL Unified API | step-free stations, journey time |
-| Open-Meteo | evening forecast |
+| Gemini API (`gemini-3.8-flash` for Ask tool calls; `gemini-4-argon` for photo read + verification, if entered) | Ask agent, photo understanding |
+| TfL Unified API (Journey, Line status, StopPoint, Road disruptions) | journeys, step-free stations, disruptions, roadworks |
+| Planning London Datahub | planning applications near a point |
+| Open-Meteo | hourly weather |
+| LAQN (Imperial College London) | air quality index |
+| Environment Agency flood monitoring | flood alerts |
+| Luma (seed snapshot; public API for event creation with Luma Plus) | events, "create an event here" |
+| OpenStreetMap Notes API | "add this place" notes |
+| xAI Grok + Cognee Cloud | existing Ask answers |
 | postcodes.io | origin geocoding |
-| Public venue pages, Luma | venue facts with source URLs (`src/data/venue-facts.json`) |
-| MongoDB Atlas (if used) | access assessments, agent log, hybrid search |
+| MongoDB Atlas (if used) | source snapshots, action log, hybrid search |
+
+Attribution: Powered by TfL Open Data · Planning London Datahub (GLA) · Open-Meteo · LAQN · Environment Agency (OGL v3) · © OpenStreetMap contributors.
 
 ## Responsibility
-- Faces and number plates are blurred in the browser before upload; EXIF/GPS is stripped.
-- No personal location is stored; the origin is used for the search only.
-- Every access claim shows its confidence and evidence; unclear inputs give "not sure", never a guess.
-- The agent never sends without approval, and only to a demo inbox.
+- Photos: GPS is read in the browser and then stripped with all EXIF; faces (and plates, when detected) are blurred before anything is published. Raw photos are not stored.
+- No personal location is stored; logs keep a rounded location only.
+- Every answer shows its sources and how fresh they are; missing or unclear data is said plainly, never guessed.
+- The agent never publishes without approval (Luma, OSM), and every action is logged.
 
 ## Stack
 
