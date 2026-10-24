@@ -1,20 +1,54 @@
-# Lumap
+# Lumap: accessible venue finder (Encode London 2026)
 
-**An open venue map for London community organisers.** Find a room that fits your group, see which venues other organisers have vouched for, ask the city's community memory, and subscribe to a ranked feed of local events.
+**Find a London venue your whole group can actually get into.** Lumap reads venue photos and listings, checks them against OpenStreetMap, TfL and the weather, and shows the top 3 with reasons and a confidence level. When it can't tell, it says "not sure" and drafts a question to the venue, which you approve before it's sent.
 
-**Live demo:** [lumap-self.vercel.app](https://lumap-self.vercel.app)
+**For:** London community organisers running 30–100 person events with wheelchair users or people who need step-free access, quiet rooms or seating. Today they phone each venue to ask "is it really step-free?"
 
-Built at the Grok Bot Community Engineering London Hackathon (22 Oct 2026), Track 4: Open Venue & Events DB.
+**Live demo:** [lumap-self.vercel.app](https://lumap-self.vercel.app) · Built for the **Encode London Hackathon** (23–25 Oct 2026): The Real World + Agents That Ship.
+
+> **Disclosure:** Lumap's base map and chat started at an earlier hackathon on 22 Oct 2026. Last pre-Encode commit: `5809e2d` (tag `encode-baseline`). Encode-built features are listed below; see `git diff encode-baseline..encode-london`.
 
 ![Lumap: venue search with pins and the venue panel](docs/screenshot.png)
 
-## What it does
+## Status (Encode checkpoints)
+- [x] CP1 Fri 18:00: check-in (idea, bounty)
+- [x] CP2 Sat 18:00: progress (demo link, repo, problem). Bounties: The Real World, Agents That Ship
+- [ ] CP3 Sun 12:00 GMT: final submission (3-min video, repo, bounties)
 
-- **Find a room.** Pick an area, capacity, day and time. Lumap searches venues within walking distance (PostGIS) and returns the best three, with a plain-English reason for each match.
-- **Map and venue panel.** Results drop onto a MapLibre map as numbered pins. Click a pin or a card to fly to it and open a panel with capacity, distance, trust status, why it matches, a vouch button and directions.
-- **Vouch-based trust.** New venues stay pending until trusted organisers vouch for them. The Add venue form shows this flow.
-- **Ask Lumap.** Ask questions in text or by voice (Web Speech API). Answers come from Cognee community memory, with their sources.
-- **Events feed.** `/api/calendar.ics` serves a ranked London community events feed that you can subscribe to from any calendar app.
+## Built at Encode (Fri 23 Oct 17:00 onwards)
+- [ ] Photo intake with in-browser face/plate blur and EXIF/GPS stripping
+- [ ] AI access read (step-free entrance, steps, toilet, seating, AV, noise) with confidence, evidence and "not sure"
+- [ ] Verification loop: each claim checked against OSM `wheelchair` tags and TfL step-free data
+- [ ] TfL nearest step-free station + journey time, Open-Meteo evening forecast
+- [ ] Accessible top 3 on the map with reasons, confidence and sources
+- [ ] Request agent: drafts questions for the unknowns, human approves, sends to a demo inbox only, and logs every step
+- [x] General polish on Fri evening (sign-in, date picker, postcode origin, Ask fixes). Not part of the Encode feature.
+
+## Already there before Encode
+- **Find a room:** area, capacity, date and time → PostGIS search within walking distance, the best three with a reason each.
+- **Map and venue panel:** MapLibre pins; click for capacity, distance, trust status, organiser details and directions.
+- **Vouch-based trust:** venues and reports need vouched organisers (Supabase RLS, a shared review queue, a 2-vouch trigger).
+- **Ask Lumap:** text or voice (Web Speech API), answered from Cognee community memory + Grok, with sources.
+- **Events feed:** `/api/calendar.ics`, a ranked London community events feed.
+
+## Models & data sources
+*(fill in as built)*
+| Model / source | Used for |
+|---|---|
+| Gemini API (`gemini-4-argon` / `gemini-3.8-flash`, TBD) | photo + listing access read, claim verification |
+| xAI Grok + Cognee Cloud | Ask answers (grounded in retrieved docs) |
+| OpenStreetMap (Overpass) | `wheelchair`, `toilets:wheelchair` tags |
+| TfL Unified API | step-free stations, journey time |
+| Open-Meteo | evening forecast |
+| postcodes.io | origin geocoding |
+| Public venue pages, Luma | venue facts with source URLs (`src/data/venue-facts.json`) |
+| MongoDB Atlas (if used) | access assessments, agent log, hybrid search |
+
+## Responsibility
+- Faces and number plates are blurred in the browser before upload; EXIF/GPS is stripped.
+- No personal location is stored; the origin is used for the search only.
+- Every access claim shows its confidence and evidence; unclear inputs give "not sure", never a guess.
+- The agent never sends without approval, and only to a demo inbox.
 
 ## Stack
 
@@ -27,9 +61,7 @@ Built at the Grok Bot Community Engineering London Hackathon (22 Oct 2026), Trac
 
 ## Vouch trust model
 
-The city starts with a small set of trusted root organisers. An approved organiser can vouch for another organiser, and only vouched organisers can add or edit venue records. Row-level security in Supabase enforces this (see `supabase/policies.sql`). Venues need two vouches before they appear publicly. Unvouched users never see venue contact details, and revoking a vouch hides that organiser's edits again.
-
-In the hackathon demo, the database policies and search are live. The Add venue form and the vouch button in the venue panel are front-end only and don't write to the database yet.
+The city starts with a small set of trusted root organisers. An approved organiser can vouch for another, and only vouched organisers can add or edit venue records. Row-level security in Supabase enforces this (`supabase/policies.sql`). Venues need two vouches before they appear publicly, unvouched users never see venue contact details, and revoking a vouch hides that organiser's edits again.
 
 ## Data
 

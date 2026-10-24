@@ -1,8 +1,8 @@
 ---
-description: Hackathon project context
+description: Encode London project context
 alwaysApply: true
 ---
-This is a hackathon project with a hard code freeze tonight. Read `knowledge/idea.md`, `knowledge/judging.md` and `knowledge/sponsors.md` before planning. Follow `AGENTS.md`. Keep scope tiny and demo-first.
+Lumap at the Encode London Hackathon 2026 (The Real World + Agents That Ship). Read `knowledge/encode-london.md`, `knowledge/sponsors-fit.md` and `knowledge/event.md` before planning. Follow `AGENTS.md`. Feature freeze Sun 10:30 GMT, submission Sun 12:00 GMT. Keep scope tiny and demo-first.
 
+- Every AI access claim has confidence + evidence; "not sure" when unclear. No faces, EXIF or user locations stored. Email only to the demo inbox, after human approval.
 - Light theme only, matching docs/lumap-mockup.jpg. Use shadcn/ui, Magic UI or Aceternity, and Framer Motion. Do not write or run tests.
-

@@ -1,10 +1,8 @@
 ---
-description: Work in small chunks from the task queue
+description: Work in small chunks from the Encode build queue
 alwaysApply: true
 ---
-- The build queue is knowledge/tasks.md. Unless told a task id, take the first unticked task in your lane.
-- Do ONLY that one task. Do not start the next one, refactor unrelated code, or expand scope.
-- If it will take more than about 20 minutes, split it into smaller cards in tasks.md and do only the first.
-- When done: tick the box, add one line under Notes (what changed, anything the next task needs), commit with the task id in the message (for example 'UI2: light map with pins'), then stop and report in 3 lines.
-- Never touch files owned by another lane without saying so in Notes.
-
+- The build queue is the build order table in knowledge/encode-london.md §3 (cards E1–E8, M1, D1). Unless told a card id, take the first unticked card.
+- Do ONLY that one card. Do not start the next one, refactor unrelated code, or expand scope.
+- If it will take longer than its timebox, split it and do only the first part. 15-min debug cap per bug, then use the card's fallback.
+- When done: tick the card, commit with the card id in the message (for example 'E3: access read'), then stop and report in 3 lines.
