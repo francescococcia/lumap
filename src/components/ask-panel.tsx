@@ -72,8 +72,8 @@ function withNames(text: string, key: string, ctx: Ctx): React.ReactNode[] {
   return out;
 }
 
-function bold(text: string, key: string, ctx: Ctx) {
-  return text.split(/(\*\*[^*]+\*\*)/g).flatMap((part, i) =>
+function bold(text: string, key: string, ctx: Ctx): React.ReactNode[] {
+  return text.split(/(\*\*[^*]+\*\*)/g).flatMap((part, i): React.ReactNode[] =>
     part.startsWith("**") && part.endsWith("**")
       ? [<strong key={`${key}-${i}`} className="font-semibold text-[#20202a]">{withNames(part.slice(2, -2), `${key}-${i}`, ctx)}</strong>]
       : withNames(part.replace(/[*_`]/g, ""), `${key}-${i}`, ctx),
@@ -167,7 +167,28 @@ export type AskVenue = {
   [key: string]: unknown;
 };
 
-type Turn = { id: number; q: string; answer: string | null; sources: string[]; error?: string; venues: AskVenue[]; pending?: boolean };
+type More = { answer: string; venues: AskVenue[]; sources: string[] };
+type Turn = { id: number; q: string; answer: string | null; sources: string[]; error?: string; venues: AskVenue[]; pending?: boolean; more?: More };
+
+const turnVenues = (t: Turn) => [...t.venues, ...(t.more?.venues ?? [])];
+
+/** The fuller answer goes under a lead-in of its own, so drop its opening line if it is just a greeting. */
+function withoutOpener(answer: string, places: AskVenue[]) {
+  const lines = answer.split(/\r?\n/);
+  const first = lines.findIndex((l) => l.trim());
+  const line = lines[first] ?? "";
+  if (first < 0 || /^\s*(?:[-*\u2022#|]|\d+[.)])/.test(line) || mentionedIn(line, places).length) return answer;
+  return lines.slice(first + 1).join("\n").trim();
+}
+
+function ShowAll({ venues }: { venues: AskVenue[] }) {
+  if (venues.length < 2) return null;
+  return (
+    <button type="button" onClick={() => showOnMap(venues, null, venues.map((v) => v.id))} className="inline-flex items-center gap-1.5 rounded-full bg-[#7854f6] px-3.5 py-1.5 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-[#6842eb]">
+      <MapIcon className="h-3.5 w-3.5" aria-hidden="true" /> Show all {venues.length} on map
+    </button>
+  );
+}
 
 const POSTCODE = /\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b/i;
 
@@ -351,19 +372,19 @@ export function AskPanel() {
   }, [turns]);
 
   const pick = (id: string) => {
-    const all = turnsRef.current.flatMap((t) => t.venues);
+    const all = turnsRef.current.flatMap(turnVenues);
     const unique = all.filter((v, i) => all.findIndex((x) => x.id === v.id) === i);
     showOnMap(unique, id);
   };
 
   function pinTurn(venues: AskVenue[]) {
     if (!venues.length) return;
-    const earlier = turnsRef.current.flatMap((t) => t.venues).filter((e) => !venues.some((v) => v.id === e.id));
+    const earlier = turnsRef.current.flatMap(turnVenues).filter((e) => !venues.some((v) => v.id === e.id));
     showOnMap([...venues, ...earlier], null, venues.map((v) => v.id));
   }
 
   // Two requests at once: an instant answer from what Lumap already knows, and the slower
-  // community-memory answer, which replaces it when it arrives with places of its own.
+  // community-memory answer, shown as a second message when it suggests places the first didn't.
   async function ask(prompt: string) {
     if (!prompt || loading) return;
     setLoading(true);
@@ -378,8 +399,9 @@ export function AskPanel() {
       .join("\n\n");
     const full = history ? `Earlier in this conversation:\n${history}\n\nFollow-up question: ${prompt}` : prompt;
     const payload = { question: full, latest: prompt, previous: past.map((t) => t.q) };
-    const earlier = past.flatMap((t) => t.venues);
+    const earlier = past.flatMap(turnVenues);
     let shown = false;
+    let quickVenues: AskVenue[] = [];
     let settled = false;
     const update = (patch: Partial<Turn>) => setTurns((ts) => ts.map((t) => (t.id === id ? { ...t, ...patch } : t)));
 
@@ -389,6 +411,7 @@ export function AskPanel() {
         const venues = await placesFor(data, earlier);
         if (settled) return;
         shown = true;
+        quickVenues = venues;
         setTurns((ts) => [...ts, { id, q: prompt, answer: data.answer, sources: [], venues, pending: true }]);
         setLoading(false);
         pinTurn(venues);
@@ -400,9 +423,13 @@ export function AskPanel() {
         const venues = ok && data.answer ? await placesFor(data, earlier) : [];
         await quick;
         settled = true;
-        if (ok && data.answer && (venues.length || !shown)) {
-          if (shown) update({ answer: data.answer, sources: data.sources ?? [], venues, pending: false });
-          else setTurns((ts) => [...ts, { id, q: prompt, answer: data.answer, sources: data.sources ?? [], venues }]);
+        const fresh = venues.filter((v) => !quickVenues.some((q) => q.id === v.id || q.name.toLowerCase() === v.name.toLowerCase()));
+        if (shown && ok && data.answer && fresh.length) {
+          const text = withoutOpener(data.answer, venues);
+          update({ pending: false, more: { answer: text, venues, sources: data.sources ?? [] } });
+          pinTurn([...quickVenues, ...fresh]);
+        } else if (!shown && ok && data.answer) {
+          setTurns((ts) => [...ts, { id, q: prompt, answer: data.answer, sources: data.sources ?? [], venues }]);
           pinTurn(venues);
         } else if (shown) {
           update({ pending: false });
@@ -497,25 +524,32 @@ export function AskPanel() {
                 ) : turn.answer ? (
                   <div className="rounded-2xl rounded-bl-md bg-[#faf9ff] p-5">
                     <Answer text={turn.answer} places={turn.venues} onPick={pick} />
-                    {turn.pending ? (
-                      <p className="mt-3 flex items-center gap-2 text-xs text-[#8a8894]">
-                        <LoaderCircle className="h-3.5 w-3.5 animate-spin text-[#b9a7fb]" aria-hidden="true" /> Checking what other organisers have shared…
-                      </p>
-                    ) : null}
                   </div>
                 ) : (
                   <p className="rounded-2xl bg-[#faf9ff] p-5 text-sm leading-6 text-[#6f6d78]">I couldn&apos;t find anything for that one. Try adding an area, a date or how many people?</p>
                 )}
-                {turn.venues.length > 1 ? (
-                  <button type="button" onClick={() => showOnMap(turn.venues, null, turn.venues.map((v) => v.id))} className="inline-flex items-center gap-1.5 rounded-full bg-[#7854f6] px-3.5 py-1.5 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-[#6842eb]">
-                    <MapIcon className="h-3.5 w-3.5" aria-hidden="true" /> Show all {turn.venues.length} on map
-                  </button>
+                <ShowAll venues={turn.venues} />
+                {turn.pending ? (
+                  <div aria-label="Lumap is typing" className="flex w-fit items-center gap-1 rounded-2xl rounded-bl-md bg-[#faf9ff] px-4 py-3">
+                    {[0, 1, 2].map((d) => (
+                      <motion.span key={d} className="h-1.5 w-1.5 rounded-full bg-[#b9a7fb]" animate={{ opacity: [0.3, 1, 0.3], y: [0, -2, 0] }} transition={{ duration: 1, repeat: Infinity, delay: d * 0.18 }} />
+                    ))}
+                  </div>
                 ) : null}
-                {cleanSources(turn.sources).length ? (
+                {turn.more ? (
+                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+                    <div className="rounded-2xl rounded-bl-md bg-[#faf9ff] p-5">
+                      <p className="mb-2 text-[15px] font-medium text-[#20202a]">A few more ideas from other organisers:</p>
+                      <Answer text={turn.more.answer} places={turn.more.venues} onPick={pick} />
+                    </div>
+                    <ShowAll venues={turn.more.venues} />
+                  </motion.div>
+                ) : null}
+                {cleanSources([...turn.sources, ...(turn.more?.sources ?? [])]).length ? (
                   <details className="text-xs text-[#8a8894]">
                     <summary className="flex cursor-pointer list-none items-center gap-1.5 hover:text-[#5a3fd6]"><BookOpenText className="h-3.5 w-3.5" aria-hidden="true" /> Where this comes from</summary>
                     <div className="mt-2 flex flex-wrap gap-1.5">
-                      {cleanSources(turn.sources).map((src, i) => (
+                      {cleanSources([...turn.sources, ...(turn.more?.sources ?? [])]).map((src, i) => (
                         <span key={i} className="rounded-full border border-[#ecebf0] px-2.5 py-1 text-xs text-[#6f6d78]">{src}</span>
                       ))}
                     </div>
