@@ -5,6 +5,8 @@ import { mentionedIn, nameRegex } from "@/lib/venue-match";
 import { AnimatePresence, motion } from "motion/react";
 import { BookOpenText, LoaderCircle, Map as MapIcon, MapPin, Mic, Send, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SessionCard } from "@/components/session-card";
+import { allSessions } from "@/lib/venue-facts";
 
 type SpeechResult = ArrayLike<{ transcript: string }>;
 type SpeechEventLike = { results: ArrayLike<SpeechResult> };
@@ -179,6 +181,28 @@ function withoutOpener(answer: string, places: AskVenue[]) {
   const line = lines[first] ?? "";
   if (first < 0 || /^\s*(?:[-*\u2022#|]|\d+[.)])/.test(line) || mentionedIn(line, places).length) return answer;
   return lines.slice(first + 1).join("\n").trim();
+}
+
+/** Sessions named in an answer, shown as cards with their cover image. */
+function SessionStrip({ text, venues, onPick }: { text: string; venues: AskVenue[]; onPick: Pick }) {
+  const found = mentionedIn(text, allSessions().map((x) => ({ ...x, name: x.title })));
+  if (!found.length) return null;
+  return (
+    <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-1" aria-label="Sessions in this answer">
+      {found.map((x) => {
+        const venue = venues.find((v) => x.venue_name && mentionedIn(x.venue_name, [v]).length);
+        return (
+          <SessionCard
+            key={x.key ?? x.title}
+            session={x}
+            compact
+            className="w-[210px] shrink-0 snap-start"
+            onShow={venue ? () => onPick(venue.id) : undefined}
+          />
+        );
+      })}
+    </div>
+  );
 }
 
 function ShowAll({ venues }: { venues: AskVenue[] }) {
@@ -528,6 +552,7 @@ export function AskPanel() {
                 ) : (
                   <p className="rounded-2xl bg-[#faf9ff] p-5 text-sm leading-6 text-[#6f6d78]">I couldn&apos;t find anything for that one. Try adding an area, a date or how many people?</p>
                 )}
+                {turn.answer ? <SessionStrip text={turn.answer} venues={turn.venues} onPick={pick} /> : null}
                 <ShowAll venues={turn.venues} />
                 {turn.pending ? (
                   <div aria-label="Lumap is typing" className="flex w-fit items-center gap-1 rounded-2xl rounded-bl-md bg-[#faf9ff] px-4 py-3">
@@ -542,6 +567,7 @@ export function AskPanel() {
                       <p className="mb-2 text-[15px] font-medium text-[#20202a]">A few more ideas from other organisers:</p>
                       <Answer text={turn.more.answer} places={turn.more.venues} onPick={pick} />
                     </div>
+                    <SessionStrip text={turn.more.answer} venues={turn.more.venues} onPick={pick} />
                     <ShowAll venues={turn.more.venues} />
                   </motion.div>
                 ) : null}

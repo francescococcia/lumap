@@ -17,6 +17,7 @@ import { coworkSessions, type CoworkItem } from "@/lib/cowork";
 import { listSessions, SESSIONS_CHANGE_EVENT } from "@/lib/pending-sessions";
 import { refreshQueue } from "@/lib/submissions";
 import { NEW_TAB, directionsUrl, sessionLink, venueSite } from "@/lib/links";
+import { SessionCard, SessionCover } from "@/components/session-card";
 import { TYPE_LABEL, matchingSession, sessionsInSlot, sessionWhen, useCaseScore, venueSessions, venueSources, venueType, type Session, type VenueType } from "@/lib/venue-facts";
 import { DAY_LABEL, WEEK, dayWindow, hoursFit, type DayKey, type Hours, type HoursFit } from "@/lib/hours";
 import { addDays, dateLabel, isoToLocalDate, localDateToIso, londonToday, nextWeekday, quickDates, sessionOnDate, weekdayOf } from "@/lib/dates";
@@ -716,10 +717,13 @@ export function VenueHome() {
                       pickAreaCentre();
                       void onSubmit(undefined, area.name);
                     }}
-                    className="rounded-xl bg-white px-3 py-2 text-left text-xs text-[#7a1d45] ring-1 ring-[#f3c1d4] transition-colors hover:bg-[#fff0f5]"
+                    className="flex items-center gap-3 rounded-xl bg-white px-3 py-2 text-left text-xs text-[#7a1d45] ring-1 ring-[#f3c1d4] transition-colors hover:bg-[#fff0f5]"
                   >
-                    <span className="block font-semibold">{session.title}</span>
-                    <span className="block text-[#9b3a62]">{session.venue_name} · {sessionWhen(session)}{sessionOnDate(session, date) === "check" ? " · check dates" : ""} · show {area.name}</span>
+                    <SessionCover src={session.image_url} title={session.title} className="h-11 w-[84px] shrink-0 rounded-lg" />
+                    <span className="min-w-0">
+                      <span className="block font-semibold">{session.title}</span>
+                      <span className="block text-[#9b3a62]">{session.venue_name} · {sessionWhen(session)}{sessionOnDate(session, date) === "check" ? " · check dates" : ""} · show {area.name}</span>
+                    </span>
                   </button>
                 ))}
               </div>
@@ -824,21 +828,19 @@ export function VenueHome() {
               {venueSessions(selected).filter((s) => s !== sessionById[selected.id] && s.title !== sessionById[selected.id]?.title).length ? (
                 <div className="rounded-2xl border border-[#ecebf0] p-4">
                   <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[#8473c2]"><CalendarDays className="h-3.5 w-3.5" /> {sessionById[selected.id] ? "Also regular here" : "Regular here"}</p>
-                  <ul className="grid gap-2 text-sm text-[#484751]">
+                  <div className="grid gap-3">
                     {venueSessions(selected)
                       .filter((s) => s.title !== sessionById[selected.id]?.title)
                       .map((s) => (
-                        <li key={s.title}>
-                          <span className="font-medium text-[#30303a]">{s.title}</span>
-                          <span className="block text-xs text-[#777580]">{sessionWhen(s)}{s.cadence ? `, ${s.cadence}` : ""}{s.price ? ` · ${s.price}` : ""}</span>
-                          {sessionLink(s) ? (
-                            <a href={sessionLink(s)!.url} {...NEW_TAB} className="inline-flex items-center gap-1 text-xs font-semibold !text-[#7854f6] hover:underline">
-                              {sessionLink(s)!.label} <ExternalLink className="h-3 w-3" />
-                            </a>
-                          ) : null}
-                        </li>
+                        <SessionCard
+                          key={s.title}
+                          session={s}
+                          venue={clean(selected.name)}
+                          compact
+                          extra={s.price ? <p className="text-xs font-medium text-[#7a1d45]">{s.price}</p> : null}
+                        />
                       ))}
-                  </ul>
+                  </div>
                 </div>
               ) : null}
               <div className="rounded-2xl border border-[#ecebf0] p-4">
@@ -951,7 +953,9 @@ function HappeningHere({ session, date, large }: { session: Session; date: strin
   const link = sessionLink(session);
   const check = sessionOnDate(session, date) === "check";
   return (
-    <div className={`rounded-xl border border-[#f3c1d4] bg-gradient-to-r from-[#fff0f5] to-[#fff7fa] text-[#7a1d45] ${large ? "p-4" : "px-3 py-2"}`}>
+    <div className={`overflow-hidden rounded-xl border border-[#f3c1d4] bg-gradient-to-r from-[#fff0f5] to-[#fff7fa] text-[#7a1d45] ${large ? "" : "flex gap-3 px-3 py-2"}`}>
+      {large ? <SessionCover src={session.image_url} title={session.title} className="rounded-none" /> : session.image_url ? <SessionCover src={session.image_url} title={session.title} className="h-12 w-[92px] shrink-0 self-center rounded-lg" /> : null}
+      <div className={large ? "p-4" : "min-w-0 flex-1"}>
       <p className={`flex items-center gap-1.5 font-semibold ${large ? "text-sm" : "text-xs"}`}>
         <Sparkles className="h-3.5 w-3.5 shrink-0 text-[#e0457b]" />
         Happening here: {session.title}
@@ -982,6 +986,7 @@ function HappeningHere({ session, date, large }: { session: Session; date: strin
           ) : null}
         </p>
       )}
+      </div>
     </div>
   );
 }

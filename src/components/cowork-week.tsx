@@ -1,5 +1,6 @@
 "use client";
 
+import { SessionCover } from "@/components/session-card";
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { CalendarPlus, Clock, ExternalLink, MapPin, Users } from "lucide-react";
@@ -79,7 +80,9 @@ export function CoworkWeek({ onShow, highlightDay, compact }: { onShow?: (s: Cow
               {g.sessions.map((s) => {
                 const link = sessionLink(s);
                 return (
-                  <motion.article key={s.key} layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="rounded-xl bg-white p-3 ring-1 ring-[#ece7fd]">
+                  <motion.article key={s.key} layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="overflow-hidden rounded-xl bg-white ring-1 ring-[#ece7fd]">
+                    <SessionCover src={s.image_url} title={s.title} className="rounded-none" />
+                    <div className="p-3">
                     <div className="flex items-start justify-between gap-2">
                       <h3 className="text-sm font-semibold leading-snug text-[#20202a]">{s.title}</h3>
                       {s.community ? <span className="shrink-0 rounded-full bg-[#e8f7ef] px-2 py-0.5 text-[10px] font-semibold text-[#2f7a50]">Community hosted</span> : null}
@@ -103,6 +106,7 @@ export function CoworkWeek({ onShow, highlightDay, compact }: { onShow?: (s: Cow
                           <MapPin className="h-3 w-3" /> Show on map
                         </a>
                       )}
+                    </div>
                     </div>
                   </motion.article>
                 );
