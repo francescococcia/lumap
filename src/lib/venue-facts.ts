@@ -85,6 +85,8 @@ export type Session = {
   source_url?: string | null;
   source_urls?: string[];
   summary: string | null;
+  /** The event's own cover image (Luma cover or the page's og:image), null when there isn't one. */
+  image_url?: string | null;
   venue_name?: string;
   with_others?: boolean;
   audience?: string;
@@ -136,8 +138,15 @@ export function venueSources(v: VenueLike): string[] {
   return [...new Set(list)];
 }
 
+/** Fills a database session's cover image from the bundled list when the row has none yet. */
+function withImage(s: Session): Session {
+  if (s.image_url) return s;
+  const known = SESSIONS.find((x) => (s.key && x.key === s.key) || norm(x.title) === norm(s.title));
+  return known?.image_url ? { ...s, image_url: known.image_url } : s;
+}
+
 export function venueSessions(v: VenueLike): Session[] {
-  if (Array.isArray(v.sessions) && v.sessions.length) return v.sessions;
+  if (Array.isArray(v.sessions) && v.sessions.length) return v.sessions.map(withImage);
   if (!v.name) return [];
   const n = norm(v.name);
   return SESSIONS.filter((s) => s.venue_name && (norm(s.venue_name) === n || n.startsWith(norm(s.venue_name))));

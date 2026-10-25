@@ -24,7 +24,8 @@
       "lat": 51.510926,
       "lng": -0.117683,
       "with_others": true,
-      "audience": "Builders and creatives"
+      "audience": "Builders and creatives",
+      "image_url": "https://images.lumacdn.com/cdn-cgi/image/format=auto,fit=cover,width=800/event-covers/js/761a02d4-9def-4fae-9c18-2dcc896635f7.png"
     },
     {
       "key": "founder-cowork-club-thursdays",
@@ -47,7 +48,8 @@
       "lat": 51.523717,
       "lng": -0.066484,
       "with_others": true,
-      "audience": "Purpose-driven founders"
+      "audience": "Purpose-driven founders",
+      "image_url": "https://images.lumacdn.com/cdn-cgi/image/format=auto,fit=cover,width=800/uploads/0h/c5e5ad9e-93aa-446b-8cca-3affa592874d.jpg"
     },
     {
       "key": "cafe-granola-coworking-sunday",
@@ -69,7 +71,8 @@
       ],
       "summary": "On Sundays Granola's office becomes Cafe Granola for builders: arrive 11am, shared lunch at 12, cowork 1 to 5pm. Registration was closed when checked.",
       "with_others": true,
-      "audience": "Builders"
+      "audience": "Builders",
+      "image_url": "https://images.lumacdn.com/cdn-cgi/image/format=auto,fit=cover,width=800/event-covers/ho/b32cd204-7f81-41e0-b269-48210aa8165f.png"
     },
     {
       "key": "newspeak-ration-club",
@@ -90,7 +93,8 @@
         "https://newspeak.house/events",
         "https://luma.com/RationClub"
       ],
-      "summary": "Weekly community dinner in the Lounge at Newspeak House, running since 2015 and open to anyone curious about the college."
+      "summary": "Weekly community dinner in the Lounge at Newspeak House, running since 2015 and open to anyone curious about the college.",
+      "image_url": "https://cdn.lu.ma/cdn-cgi/image/format=auto,fit=cover,width=800/event-covers/jg/a7ff7dd1-4bc3-4eef-9855-b523c435b4d4"
     },
     {
       "key": "campaign-lab-hack-night",
@@ -113,7 +117,8 @@
       ],
       "summary": "Bi-weekly hack night in the Drawing Room for technologists and campaigners working on progressive election tools. Bring a laptop.",
       "with_others": true,
-      "audience": "Technologists and campaigners, bring a laptop"
+      "audience": "Technologists and campaigners, bring a laptop",
+      "image_url": "https://newspeak.house/assets/lcpt-roundel-social-card-c0854c7b8029d576ce52f59b347cbbc86fbbfd1696a85193404bc42f481bdb89.jpg"
     },
     {
       "key": "london-hackspace-open-evening",
@@ -133,7 +138,8 @@
       "summary": "Every Wednesday the Park Royal makerspace opens its doors at 6:30pm for a tour and member induction, about two hours in total. Everyone is welcome.",
       "venue_name": "London Hackspace",
       "lat": 51.527754,
-      "lng": -0.264832
+      "lng": -0.264832,
+      "image_url": null
     },
     {
       "key": "drink-and-draw-grosvenor",
@@ -154,7 +160,8 @@
       "summary": "Untaught, drop-in life drawing in the upstairs function room of The Grosvenor pub in Hanwell every Wednesday. Boards and paper provided.",
       "venue_name": "The Grosvenor",
       "lat": 51.506224,
-      "lng": -0.32914
+      "lng": -0.32914,
+      "image_url": "https://static1.squarespace.com/static/62d6fb2b93f04975c050bdf3/t/65169ab26da3192bf1eaf8d5/1662285681636/social.jpg?format=750w"
     },
     {
       "key": "merry-nude-lillie-langtry",
@@ -174,7 +181,8 @@
       "summary": "Weekly Monday life drawing at The Lillie Langtry pub near West Brompton, with materials and friendly tuition included.",
       "venue_name": "The Lillie Langtry",
       "lat": 51.486266,
-      "lng": -0.198265
+      "lng": -0.198265,
+      "image_url": null
     },
     {
       "key": "silent-book-club-night-cafe",
@@ -195,7 +203,8 @@
       "summary": "Monthly bring-your-own-book quiet reading social at the London Night Cafe on Middlesex Street, on the fourth Tuesday of each month.",
       "venue_name": "London Night Cafe",
       "lat": 51.516552,
-      "lng": -0.076488
+      "lng": -0.076488,
+      "image_url": null
     }
   ]
 }

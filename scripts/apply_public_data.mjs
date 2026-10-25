@@ -149,7 +149,7 @@ async function main() {
       rows.push({
         session_key: s.key, venue_id: v.id, title: s.title, organiser: s.organiser, use_case: s.use_case,
         day_of_week: s.day_of_week, start_time: s.start_time, end_time: s.end_time, cadence: s.cadence,
-        price: s.price, rsvp: s.rsvp, url: s.url, source_url: s.source_urls[0], summary: s.summary,
+        price: s.price, rsvp: s.rsvp, url: s.url, source_url: s.source_urls[0], summary: s.summary, image_url: s.image_url ?? null,
         verified_at: sessions.checked_on,
       });
       console.log(`upsert session ${s.title} at ${v.name}`);
